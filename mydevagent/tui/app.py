@@ -40,7 +40,7 @@ from .. import mcp as mcp_mod
 from .. import stats as stats_mod
 from .. import update as update_mod
 from ..agent import CheckpointStore, PermissionPolicy
-from ..agent.context import append_memory, read_memory
+from ..agent.context import append_memory, collect_attachments, read_memory
 from ..agent.permissions import MODE_LABELS, ApprovalRequest
 from ..agent.permissions import MODES as PERMISSION_MODES
 from ..agent.runner import LEARN_PROMPT, AgentRunner
@@ -1228,19 +1228,7 @@ class TuiApp:
 
     # -------------------------------------------------------------- turni
     def collect_attachments(self, text: str) -> dict[str, str]:
-        files: dict[str, str] = {}
-        for token in text.split():
-            if not token.startswith("@") or len(token) < 2:
-                continue
-            candidate = token[1:].rstrip(",.;:")
-            try:
-                path = (self.root / candidate).resolve()
-            except OSError:
-                continue
-            inside = any(path.is_relative_to(d) for d in (self.root, *self.extra_dirs))
-            if path.is_file() and inside and not Workspace.is_secret(path):
-                files[candidate] = path.read_text(encoding="utf-8", errors="replace")
-        return files
+        return collect_attachments(self.root, text, self.extra_dirs)
 
     def submit(self, text: str, display: str | None = None, guest: bool = False) -> str:
         if len(self.session.history) >= AUTO_COMPACT_MESSAGES:

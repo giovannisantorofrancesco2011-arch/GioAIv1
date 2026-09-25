@@ -228,7 +228,8 @@ class AgentTools:
         return outcome.blocked, (outcome.reason if outcome.blocked else outcome.context)
 
     # ------------------------------------------------------------- permessi
-    def _authorize(self, tool: str, args: dict[str, Any], summary: str, diff: str = "") -> str | None:
+    def _authorize(self, tool: str, args: dict[str, Any], summary: str, diff: str = "",
+                   before: str | None = None, after: str | None = None) -> str | None:
         """None = consentito; altrimenti il messaggio da restituire al modello."""
         decision = self.policy.decide(tool, args)
         if decision.action == "allow":
@@ -239,7 +240,7 @@ class AgentTools:
             return "DENIED: this action needs user approval, which is not available in this context."
         command = str(args.get("command", ""))
         request = ApprovalRequest(tool=tool, args=args, summary=summary, diff=diff,
-                                  dangerous=bool(command) and is_dangerous(command))
+                                  dangerous=bool(command) and is_dangerous(command), before=before, after=after)
         with self._lock:
             answer, feedback = self.approver(request)
         if answer == "always":
@@ -377,7 +378,7 @@ class AgentTools:
                       created: bool = False) -> str:
         diff = unified_diff(old, new, rel)
         action = "Create" if created else "Update"
-        denied = self._authorize(tool, args, f"{action}({rel})", diff)
+        denied = self._authorize(tool, args, f"{action}({rel})", diff, before=None if created else old, after=new)
         if denied:
             return denied
         self.checkpoints.before_write(rel)

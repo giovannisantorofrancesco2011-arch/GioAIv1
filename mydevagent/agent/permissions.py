@@ -47,6 +47,8 @@ class ApprovalRequest:
     summary: str
     diff: str = ""
     dangerous: bool = False
+    before: str | None = None  # file intero prima e dopo la modifica: gli editor li mostrano affiancati
+    after: str | None = None
 
 
 # risposta: ("yes" | "always" | "no", feedback)

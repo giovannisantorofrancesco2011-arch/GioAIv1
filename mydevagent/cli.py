@@ -1,4 +1,4 @@
-"""CLI: mydevagent (UI interattiva) | chat | ask | serve | index | doctor | agents | route."""
+"""CLI: mydevagent (UI interattiva) | chat | ask | serve | bridge | index | doctor | agents | route."""
 
 from __future__ import annotations
 
@@ -205,6 +205,17 @@ def serve(
     from .server import serve as run_server
 
     run_server(host, port)
+
+
+@app.command()
+def bridge(
+    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
+    permissions: str = typer.Option("ask", "--permissions", help="ask | auto-edit | plan | auto"),
+) -> None:
+    """Ponte per MyDevAgent Studio: JSON su stdin/stdout nella cartella corrente (non serve usarlo a mano)."""
+    from .bridge import main as run_bridge
+
+    run_bridge(profile, permission=permissions)
 
 
 @app.command()

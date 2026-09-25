@@ -51,6 +51,23 @@ def read_memory(root: Path) -> str:
     return "\n\n".join(parts)[:MAX_MEMORY_CHARS]
 
 
+def collect_attachments(root: Path, text: str, extra_dirs: list[Path] | tuple[Path, ...] = ()) -> dict[str, str]:
+    """I file citati con @percorso nel messaggio (solo dentro il progetto o le cartelle in più, niente segreti)."""
+    files: dict[str, str] = {}
+    for token in text.split():
+        if not token.startswith("@") or len(token) < 2:
+            continue
+        candidate = token[1:].rstrip(",.;:")
+        try:
+            path = (root / candidate).resolve()
+        except OSError:
+            continue
+        inside = any(path.is_relative_to(d) for d in (root, *extra_dirs))
+        if path.is_file() and inside and not Workspace.is_secret(path):
+            files[candidate] = path.read_text(encoding="utf-8", errors="replace")
+    return files
+
+
 def append_memory(root: Path, note: str) -> Path:
     path = root / "MYDEVAGENT.md"
     existing = path.read_text(encoding="utf-8") if path.is_file() else "# MYDEVAGENT.md\n\n## Note\n"
