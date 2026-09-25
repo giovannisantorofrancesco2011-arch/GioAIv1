@@ -67,12 +67,13 @@ def main(
     ctx: typer.Context,
     profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
     continue_last: bool = typer.Option(False, "--continue", "-c", help="Riprendi l'ultima sessione in questa cartella"),
+    permissions: str = typer.Option("ask", "--permissions", help="ask | auto-edit | plan | auto"),
 ) -> None:
     """Senza sottocomando apre l'interfaccia interattiva stile Claude Code."""
     if ctx.invoked_subcommand is None:
         from .tui import run_tui
 
-        run_tui(profile, continue_last=continue_last)
+        run_tui(profile, continue_last=continue_last, permission_mode=permissions)
 
 
 @app.command()

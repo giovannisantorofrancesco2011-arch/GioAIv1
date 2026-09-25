@@ -63,9 +63,9 @@ def test_renderer_prints_agent_blocks():
     r.on_event({"type": "done", "summary": "balanced · 2 agenti"})
     r.finish()
     out = console.export_text()
-    assert "⏺ Team balanced" in out and "Architetto → Backend → Formatter" in out
+    assert "⏺ Team balanced · 2 agenti" in out and "Architetto → Backend" in out
     assert "⏺ Architetto" in out and "⎿  1.2s · 800 tok" in out
-    assert 'web_search(query="fastapi")' in out and "print(1)" in out
+    assert "Web(fastapi)" in out and "print(1)" in out
     assert r.answer.startswith("**Summary**")
 
 
@@ -129,7 +129,7 @@ def test_full_session_scripted(settings, project):
     orch = Orchestrator(settings, llm=FakeLLM())
     with create_pipe_input() as pipe:
         app = TuiApp(orch, console=console, prompt_input=pipe, prompt_output=DummyOutput(),
-                     ask=lambda q: "1", root=project)
+                     ask=lambda q: "1", root=project, background=False)
         pipe.send_text("/help\r")
         pipe.send_text("/balanced migliora @src/calc.py\r")
         pipe.send_text("/apply\r")

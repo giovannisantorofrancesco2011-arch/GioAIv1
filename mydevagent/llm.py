@@ -23,6 +23,7 @@ class Completion:
     completion_tokens: int = 0
     ms: int = 0
     tool_calls: int = 0
+    calls: list[dict[str, Any]] = field(default_factory=list)  # tool call nativi: {id, name, arguments}
 
 
 class LLM(Protocol):
@@ -33,6 +34,7 @@ class LLM(Protocol):
         tier: str = "main",
         max_tokens: int = 1024,
         temperature: float = 0.2,
+        tools: list[dict[str, Any]] | None = None,
     ) -> Completion: ...
 
     def stream(
@@ -85,19 +87,25 @@ class OpenAICompatLLM:
     def model_name(self, tier: str) -> str:
         return self.settings.resolve_model(tier)[0]
 
-    def complete(self, messages, *, tier="main", max_tokens=1024, temperature=0.2) -> Completion:
+    def complete(self, messages, *, tier="main", max_tokens=1024, temperature=0.2, tools=None) -> Completion:
         client, model = self._client_for(tier)
         start = time.perf_counter()
-        resp = client.chat.completions.create(
-            model=model, messages=messages, max_tokens=max_tokens, temperature=temperature
-        )
+        kwargs: dict[str, Any] = {"model": model, "messages": messages, "max_tokens": max_tokens,
+                                  "temperature": temperature}
+        if tools:
+            kwargs["tools"] = tools
+        resp = client.chat.completions.create(**kwargs)
         usage = getattr(resp, "usage", None)
+        msg = resp.choices[0].message
+        calls = [{"id": c.id, "name": c.function.name, "arguments": c.function.arguments or "{}"}
+                 for c in (getattr(msg, "tool_calls", None) or [])]
         return Completion(
-            text=resp.choices[0].message.content or "",
+            text=msg.content or "",
             model=model,
             prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
             completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
             ms=int((time.perf_counter() - start) * 1000),
+            calls=calls,
         )
 
     def stream(self, messages, *, tier="main", max_tokens=1024, temperature=0.2) -> Iterator[str]:
@@ -207,7 +215,7 @@ class FakeLLM:
             return "```markdown file=README.md\n# App\nUsage: `python -m app.main`\n```"
         return "**Approach**\n- simple\n```python file=app/main.py\ndef add(a: int, b: int) -> int:\n    return a + b\n```"
 
-    def complete(self, messages, *, tier="main", max_tokens=1024, temperature=0.2) -> Completion:
+    def complete(self, messages, *, tier="main", max_tokens=1024, temperature=0.2, tools=None) -> Completion:
         role = self._role(messages)
         self.calls.append({"role": role, "tier": tier, "messages": messages})
         text = self._answer(role, messages)

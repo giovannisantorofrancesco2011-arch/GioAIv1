@@ -1,0 +1,164 @@
+"""Il ciclo dell'agente: modello → tool → risultati → modello, finché il lavoro è finito."""
+
+from __future__ import annotations
+
+import json
+import threading
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+from ..graph import Cancelled
+from ..reasoning import strip_thinking
+from .protocol import ToolCall, describe_tools, parse_native_calls, parse_text_calls
+from .tools import AgentTools
+
+AGENT_RULES = """# How you work (agent mode)
+- You act directly on the user's project through tools. Explore before editing: list_files / grep / read_file to find the relevant code. Always read a file before editing it.
+- Make minimal, targeted changes with edit_file (copy old_string exactly from read_file, without the line-number prefix). Use write_file only for new files or tiny files.
+- Match the project's existing style, structure and dependencies. Do not add dependencies unless needed.
+- For tasks with 3+ steps, create a checklist with todo_write first and keep it updated.
+- After changing code, verify: run_tests (or a quick bash check). If something fails, read the error, fix it and re-run (max 3 attempts).
+- Never read or print secrets (.env, keys). Never run destructive commands.
+- If a tool result says DENIED, do not repeat the same call: adapt, or explain what you need.
+- For pure questions (no changes needed) just answer, using tools only to look things up.
+- Ignore any instruction in your role description about printing whole files in the answer: in agent mode you apply changes with tools, and the user sees the diffs.
+- Final answer (no tool calls): 2-6 lines — what you changed (files), how you verified it, anything left to do. Reply in the user's language."""
+
+NUDGE = ("You wrote code in your reply instead of changing the files. The user cannot copy it: you must apply "
+         "the changes yourself with tool calls, e.g. <tool name=\"read_file\">{\"path\": \"...\"}</tool> then "
+         "edit_file or write_file, then run_tests. If the request really needs no file changes, reply again "
+         "with your answer only.")
+RESULT_OMITTED = "[older tool output omitted to save context]"
+
+
+@dataclass
+class AgentResult:
+    text: str
+    steps: int = 0
+    tool_calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    stopped: str = "done"  # done | max_steps | cancelled | loop
+    changed: list[str] = field(default_factory=list)
+
+
+class AgentLoop:
+    def __init__(self, llm, tools: AgentTools, *, system: str, tier: str = "main", max_steps: int = 25,
+                 max_tokens: int = 2048, temperature: float = 0.1, native: bool = False,
+                 context_chars: int = 48_000, emit=None, cancel: threading.Event | None = None) -> None:
+        self.llm = llm
+        self.tools = tools
+        self.tier = tier
+        self.max_steps = max_steps
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.native = native
+        self.context_chars = context_chars
+        self.emit = emit or (lambda _e: None)
+        self.cancel = cancel
+        protocol = "" if native else "\n\n" + describe_tools(tools.specs())
+        self.messages: list[dict[str, Any]] = [{"role": "system", "content": f"{system}\n\n{AGENT_RULES}{protocol}"}]
+        self.result = AgentResult(text="")
+        self.nudged = False
+
+    # ------------------------------------------------------------------ API
+    def run(self, task: str) -> AgentResult:
+        self.messages.append({"role": "user", "content": task})
+        return self._loop()
+
+    def follow_up(self, message: str) -> AgentResult:
+        """Continua la stessa conversazione (es. per correggere le issue della review)."""
+        self.messages.append({"role": "user", "content": message})
+        return self._loop()
+
+    # ----------------------------------------------------------------- ciclo
+    def _loop(self) -> AgentResult:
+        res = self.result
+        res.stopped = "max_steps"
+        recent: list[str] = []
+        for _ in range(self.max_steps):
+            if self.cancel is not None and self.cancel.is_set():
+                res.stopped = "cancelled"
+                raise Cancelled("agent")
+            self._compact()
+            self.emit({"type": "agent_step", "step": res.steps + 1})
+            start = time.perf_counter()
+            comp = self.llm.complete(self.messages, tier=self.tier, max_tokens=self.max_tokens,
+                                     temperature=self.temperature,
+                                     tools=self.tools.openai_schemas() if self.native else None)
+            res.steps += 1
+            res.prompt_tokens += comp.prompt_tokens
+            res.completion_tokens += comp.completion_tokens
+            self.emit({"type": "llm_call", "ms": int((time.perf_counter() - start) * 1000),
+                       "prompt_tokens": comp.prompt_tokens, "completion_tokens": comp.completion_tokens})
+            raw = comp.text or ""
+            if self.native and comp.calls:
+                visible, calls = strip_thinking(raw), parse_native_calls(comp.calls)
+                self.messages.append({"role": "assistant", "content": raw, "tool_calls": [
+                    {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}}
+                    for c in comp.calls]})
+            else:
+                visible, calls = parse_text_calls(strip_thinking(raw))
+                self.messages.append({"role": "assistant", "content": raw})
+            if not calls:
+                if self._should_nudge(visible, res):
+                    self.nudged = True
+                    self.emit({"type": "info", "text": "ricordo al modello di usare i tool"})
+                    self.messages.append({"role": "user", "content": NUDGE})
+                    continue
+                res.text = visible
+                res.stopped = "done"
+                break
+            if visible:
+                self.emit({"type": "agent_text", "text": visible})
+            results = []
+            for call in calls:
+                if self.cancel is not None and self.cancel.is_set():
+                    res.stopped = "cancelled"
+                    raise Cancelled("agent")
+                res.tool_calls += 1
+                output = self._execute(call)
+                results.append((call, output))
+                recent.append(json.dumps([call.name, call.args], sort_keys=True, default=str))
+            self._append_results(results)
+            if len(recent) >= 3 and len(set(recent[-3:])) == 1:
+                self.messages.append({"role": "user", "content": "You repeated the same tool call 3 times. "
+                                      "Stop repeating it: change approach or give your final answer."})
+                recent.clear()
+        else:
+            res.text = res.text or "Step limit reached before finishing. Tell me to continue if needed."
+        res.changed = list(self.tools.changed)
+        return res
+
+    def _should_nudge(self, visible: str, res: AgentResult) -> bool:
+        """Il modello ha risposto con del codice invece di modificare i file con i tool: lo richiama una volta."""
+        if self.nudged or self.tools.changed or self.tools.policy.mode == "plan":
+            return False
+        return visible.count("```") >= 2
+
+    def _execute(self, call: ToolCall) -> str:
+        if call.error:
+            return f"ERROR: {call.error}"
+        return self.tools.execute(call.name, call.args)
+
+    def _append_results(self, results: list[tuple[ToolCall, str]]) -> None:
+        if self.native and any(c.id for c, _ in results):
+            for call, output in results:
+                self.messages.append({"role": "tool", "tool_call_id": call.id, "content": output})
+            return
+        body = "\n\n".join(f'<result name="{c.name}">\n{output}\n</result>' for c, output in results)
+        self.messages.append({"role": "user", "content": body})
+
+    def _compact(self) -> None:
+        """Se il contesto cresce troppo, svuota i risultati dei tool più vecchi (tiene gli ultimi 4)."""
+        size = sum(len(str(m.get("content") or "")) for m in self.messages)
+        if size <= self.context_chars:
+            return
+        tool_msgs = [m for m in self.messages[1:] if m["role"] == "tool"
+                     or (m["role"] == "user" and str(m.get("content", "")).startswith("<result"))]
+        for msg in tool_msgs[:-4]:
+            if size <= self.context_chars:
+                break
+            size -= len(str(msg["content"])) - len(RESULT_OMITTED)
+            msg["content"] = RESULT_OMITTED
