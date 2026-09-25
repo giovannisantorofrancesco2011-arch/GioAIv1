@@ -209,4 +209,23 @@ def test_permission_cycle_and_toolbar(settings, project):
                      root=project, background=False)
     assert app.policy.next_mode() == "auto-edit" and app.policy.next_mode() == "plan"
     text = "".join(t for _, t in app.toolbar())
-    assert "plan" in text and "agente" in text
+    assert "⏸ modalità plan" in text and "(⌐■_■)" in text  # Vio con gli occhiali in modalità plan
+    app.agent_mode = False
+    text = "".join(t for _, t in app.toolbar())
+    assert "modalità chat" in text and "(•ᴗ•)" in text
+
+
+def test_vio_reacts_to_modes(settings, project):
+    from mydevagent.tui import mascot
+
+    assert all(len(row) == 14 for e in mascot.EXPRESSIONS for row in mascot.sprite(e))
+    assert all(e in mascot.SAYS for e in ("ask", "auto-edit", "plan", "auto", "chat", "fast", "ultra-deep"))
+    console = record_console()
+    with create_pipe_input() as pipe:
+        app = TuiApp(Orchestrator(settings, llm=FakeLLM()), console=console, prompt_input=pipe,
+                     prompt_output=DummyOutput(), root=project, background=False)
+    for cmd in ("/plan", "/deep", "/chat", "/vio"):
+        app.handle_command(cmd)
+    out = console.export_text()
+    assert "Modalità plan. Leggo e ti propongo" in out and "Team deep." in out
+    assert "Modalità chat" in out and "Grazie! ♥" in out and "▀" in out

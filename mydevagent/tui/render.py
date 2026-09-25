@@ -12,7 +12,9 @@ from rich.spinner import Spinner
 from rich.syntax import Syntax
 from rich.text import Text
 
-ACCENT = "#d97757"
+from . import mascot
+
+ACCENT = mascot.PURPLE
 THEMES = {
     "dark": {"code": "monokai", "diff": "ansi_dark"},
     "light": {"code": "friendly", "diff": "ansi_light"},
@@ -181,7 +183,8 @@ class TurnRenderer:
         elapsed = time.monotonic() - self.started
         spinner = Spinner(
             "dots",
-            text=Text.from_markup(f"[{ACCENT}]✻ {escape(self.status)}…[/] [dim](esc per interrompere · "
+            text=Text.from_markup(f"[{ACCENT}]{mascot.think_face(elapsed)} {escape(self.status)}…[/] "
+                                  f"[dim](esc per interrompere · "
                                   f"{elapsed:.0f}s · {self.tokens + len(self.answer) // 4:,} tok)[/]".replace(",", ".")),
             style=ACCENT,
         )
@@ -201,4 +204,4 @@ class TurnRenderer:
         if self.cancelled:
             self.console.print("[yellow]⏺ Interrotto dall'utente[/]")
         if self.summary:
-            self.console.print(f"[dim]{escape(self.summary)}[/]")
+            self.console.print(f"[{ACCENT}]{mascot.face('done')}[/] [dim]{escape(self.summary)}[/]")

@@ -85,6 +85,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/compact` | riassume la conversazione (automatico oltre 10 turni) |
 | `/model <nome>` · `/models` | cambia modello per la sessione (`--save` lo ricorda nel `.env`) · modelli installati e in uso |
 | `/pull <nome>` | scarica un modello da Ollama con barra di avanzamento |
+| `/vio` | saluta (e accarezza) Vio, la mascotte |
 | `/agents` | i 35 agenti (nucleo e ultra) |
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
 | `/index` | indicizza il progetto per la ricerca semantica (di solito lo fa da solo in background) |
@@ -140,3 +141,13 @@ posto non mostra niente. Altrimenti:
 
 Anche gli errori durante l'uso sono spiegati in italiano con il rimedio (modello non installato, server non
 raggiungibile, modello troppo lento, memoria insufficiente), nella UI, in `mydevagent ask` e nel server.
+
+## Vio, la mascotte
+Vio è la gattina viola di MyDevAgent, disegnata in pixel art direttamente nel terminale. Cambia espressione
+con la modalità: curiosa in `ask`, entusiasta in `auto-edit`, con gli occhiali in `plan`, con gli occhi a
+stella in `auto`, e ha un'espressione anche per la chat e per ogni team (`/fast`, `/balanced`, `/deep`,
+`/ultra-deep`). La sua faccina nella barra in basso cambia subito quando premi `Shift+Tab`. Mentre lavora si
+guarda intorno accanto all'indicatore di avanzamento, a fine lavoro sorride, e se qualcosa va storto ha gli
+occhi a X. Con `/vio` la saluti (e la accarezzi).
+
+Anteprima di tutte le espressioni: `python -m mydevagent.tui.mascot`.
