@@ -18,7 +18,7 @@ from ..hooks import Hooks
 from ..mcp import McpManager
 from ..skills import Skill
 from ..subagents import SubAgent
-from ..tools.filesystem import IGNORED_DIRS, Workspace, WorkspaceError
+from ..tools.filesystem import IGNORED_DIRS, Workspace, WorkspaceError, display_path
 from ..tools.preview import is_local
 from .checkpoints import CheckpointStore
 from .permissions import EDIT_TOOLS, ApprovalRequest, Approver, PermissionPolicy, is_dangerous
@@ -141,9 +141,10 @@ class AgentTools:
                  bash_timeout: int = 120, skills: dict[str, Skill] | None = None,
                  hooks: Hooks | None = None, mcp: McpManager | None = None,
                  subagents: dict[str, SubAgent] | None = None, spawn: Spawn | None = None,
-                 allowed: set[str] | None = None) -> None:
+                 allowed: set[str] | None = None, extra_dirs: list[Path] | None = None) -> None:
         self.root = Path(root).resolve()
-        self.workspace = Workspace(self.root, allow_write=True)
+        self.extra_dirs = [Path(d).resolve() for d in extra_dirs or []]  # cartelle in più (/add-dir)
+        self.workspace = Workspace(self.root, allow_write=True, extra=self.extra_dirs)
         self.policy = policy
         self.checkpoints = checkpoints
         self.approver = approver
@@ -253,7 +254,7 @@ class AgentTools:
     # ------------------------------------------------------------------ tool
     def _rel(self, path: str) -> tuple[str, Path]:
         target = self.workspace.resolve(path)
-        return target.relative_to(self.root).as_posix(), target
+        return display_path(self.root, target), target
 
     def _t_read_file(self, path: str, offset: int = 1, limit: int = DEFAULT_READ_LINES) -> str:
         rel, target = self._rel(path)
@@ -275,10 +276,10 @@ class AgentTools:
         base = self.workspace.resolve(path)
         out = []
         for item in sorted(base.rglob(pattern)):
-            rel = item.relative_to(self.root)
+            rel = item.relative_to(self.root if item.is_relative_to(self.root) else base)
             if any(part in IGNORED_DIRS for part in rel.parts) or not item.is_file():
                 continue
-            out.append(rel.as_posix())
+            out.append(display_path(self.root, item))
             if len(out) >= 400:
                 out.append("… (truncated, use a narrower path or pattern)")
                 break
@@ -339,7 +340,13 @@ class AgentTools:
             re.compile(pattern)
         except re.error as exc:
             return f"ERROR: invalid regex: {exc}"
-        return self.workspace.grep(pattern, glob, limit=80)
+        found = []
+        for base in (self.root, *self.extra_dirs):  # anche nelle cartelle in più
+            hits = Workspace(base).grep(pattern, glob, limit=80)
+            if hits != "no matches":
+                prefix = "" if base == self.root else display_path(self.root, base) + "/"
+                found += [line if line == "…" else prefix + line for line in hits.splitlines()]
+        return "\n".join(found) or "no matches"
 
     def _t_edit_file(self, path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
         rel, target = self._rel(path)
@@ -458,13 +465,16 @@ class AgentTools:
                 return "ERROR: preview is for sites on this computer (localhost); use web_fetch for the others."
         elif start:
             return "ERROR: with `start`, also give the `url` where the server answers (e.g. http://localhost:5173)."
-        elif path:
-            self.workspace.resolve(path)  # dentro il progetto
+        base = self.root
+        if path and not url:  # un file del progetto o di una cartella in più: si serve la sua cartella
+            target = self.workspace.resolve(path)
+            base = next(b for b in (self.root, *self.extra_dirs) if target.is_relative_to(b))
+            path = target.relative_to(base).as_posix()
         if start:  # accendere un server è un comando come gli altri: stessi permessi di bash
             denied = self._authorize("bash", {"command": start}, f"Bash({start})")
             if denied:
                 return denied
-        return self.preview_fn(self.root, url=url, path=path, start=start, look=look)
+        return self.preview_fn(base, url=url, path=path, start=start, look=look)
 
     def _t_web_search(self, query: str) -> str:
         if not self.web_search_fn:

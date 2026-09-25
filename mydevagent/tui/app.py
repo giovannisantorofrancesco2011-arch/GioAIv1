@@ -47,7 +47,7 @@ from ..orchestrator import Orchestrator
 from ..skills import load_skills
 from ..subagents import load_subagents
 from ..tools import preview as preview_mod
-from ..tools.filesystem import Workspace, WorkspaceError
+from ..tools.filesystem import Workspace, WorkspaceError, display_path
 from . import extras, mascot
 from .apply import apply_answer
 from .completion import DevCompleter
@@ -71,6 +71,7 @@ COMMANDS = {
     "/agent": "modalità agente: lavora direttamente sui file (default)",
     "/apply": "scrivi su disco i file dell'ultima risposta (modalità chat)",
     "/impara": "modalità impara: Vio spiega cosa fa e ti lascia scrivere un pezzo di codice · /impara off",
+    "/add-dir": "lavora anche su un'altra cartella (es. il backend) · /add-dir <cartella> · /add-dir rimuovi <cartella>",
     "/anteprima": "apre nel browser il sito del progetto (su localhost) · /anteprima <file.html | url>",
     "/new": "crea un progetto pronto: sito, gioco, bot-discord, api, python · /new <modello> [nome]",
     "/init": "crea MYDEVAGENT.md con comandi e convenzioni del progetto",
@@ -120,6 +121,7 @@ class TuiApp:
         agent_mode: bool = True,
         background: bool = True,
         startup_check: bool | None = None,
+        extra_dirs: list[Path] | None = None,
     ) -> None:
         self.orch = orchestrator or Orchestrator(load_settings(overrides={"profile": profile} if profile else None))
         self.console = console or Console()
@@ -149,6 +151,9 @@ class TuiApp:
         self.mcp = McpManager(self.root, configs={})  # si avviano in start_project, dopo il tuo sì
         self._load_prefs()
         self.learn = bool(self._prefs().get("learn"))  # modalità impara
+        self.extra_dirs = self._saved_dirs()  # cartelle in più: quelle ricordate per il progetto + --add-dir
+        self.extra_dirs += [d for d in (Path(p).expanduser().resolve() for p in extra_dirs or [])
+                            if d.is_dir() and d != self.root and d not in self.extra_dirs]
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
         names = {"/skill": lambda: list(load_skills(self.root)), "/new": lambda: list(templates.TEMPLATES)}
@@ -224,6 +229,43 @@ class TuiApp:
             prefs = {}
         prefs[key] = value
         path.write_text(json.dumps(prefs, indent=1), encoding="utf-8")
+
+    def _saved_dirs(self) -> list[Path]:
+        saved = self._prefs().get("dirs", {}).get(str(self.root), [])
+        return [Path(d) for d in saved if Path(d).is_dir()]
+
+    def _add_dir(self, arg: str) -> None:
+        """/add-dir: altre cartelle in cui l'agente legge, cerca e modifica (ricordate per questo progetto)."""
+        c = self.console
+        action, _, rest = arg.partition(" ")
+        remove = action.lower() in ("rimuovi", "remove", "togli")
+        target = (rest if remove else arg).strip().strip('"')
+        if target:
+            folder = (self.root / Path(target).expanduser()).resolve()
+            if remove:
+                self.extra_dirs = [d for d in self.extra_dirs if d != folder]
+            elif not folder.is_dir():
+                c.print(f"[red]⎿  non trovo la cartella {escape(str(folder))}[/]", highlight=False)
+                return
+            elif folder == self.root or folder in self.extra_dirs:
+                c.print("[dim]⎿  questa cartella c'è già[/]")
+                return
+            else:
+                self.extra_dirs.append(folder)
+            dirs = self._prefs().get("dirs", {})
+            dirs[str(self.root)] = [str(d) for d in self.extra_dirs]
+            self._save_pref("dirs", dirs)
+        if not self.extra_dirs:
+            c.print("[dim]⎿  L'agente lavora solo in questa cartella. /add-dir <cartella> ne aggiunge un'altra, "
+                    "per esempio /add-dir ../backend[/]", highlight=False)
+            return
+        if target and not remove:
+            c.print(f"[green]⏺[/] Aggiunta {escape(str(folder))}: l'agente può leggere, cercare e modificare anche "
+                    "lì (con i soliti permessi)", highlight=False)
+            self.say("Ora lavoro su più cartelle insieme!", "love")
+        c.print("[dim]⎿  cartelle: " + escape(str(self.root)) + " (progetto) · "
+                + " · ".join(escape(display_path(self.root, d)) for d in self.extra_dirs)
+                + " · /add-dir rimuovi <cartella> per toglierne una[/]", highlight=False)
 
     def _check_online(self) -> None:
         try:
@@ -349,7 +391,9 @@ class TuiApp:
             f"[dim]hardware:[/] {self._hardware}\n"
             f"[dim]memoria:[/]  {memory}\n"
             f"[dim]skill:[/]    {skill_line}\n"
-            f"[dim]plugin:[/]   {plugin_line}\n\n"
+            f"[dim]plugin:[/]   {plugin_line}\n"
+            + (f"[dim]cartelle:[/] {escape(' · '.join(display_path(self.root, d) for d in self.extra_dirs))} "
+               "[dim](/add-dir)[/]\n" if self.extra_dirs else "") + "\n"
             "[dim]Suggerimenti:[/]\n"
             f"  [{ACCENT}]•[/] chiedi di modificare il codice: l'agente legge, modifica, lancia i test e ti mostra i diff\n"
             f"  [{ACCENT}]•[/] [bold]/[/] comandi · [bold]@file[/] allega · [bold]![/]shell · [bold]#[/]nota in memoria\n"
@@ -474,6 +518,8 @@ class TuiApp:
                     self.completer.refresh()
         elif cmd == "/new":
             self._new(arg)
+        elif cmd == "/add-dir":
+            self._add_dir(arg)
         elif cmd == "/anteprima":
             self._preview(arg)
         elif cmd == "/impara":
@@ -681,6 +727,7 @@ class TuiApp:
         existing = self.checkpoints.list()
         self.session_start_cp = (existing[-1].id + 1) if existing else 1
         self.last_answer, self.last_files, self.pending_context = "", {}, {}
+        self.extra_dirs = self._saved_dirs()
         self.branch = self._git_branch()
         self.custom = extras.custom_commands(self.root)
         self.completer.commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
@@ -1089,7 +1136,8 @@ class TuiApp:
                 path = (self.root / candidate).resolve()
             except OSError:
                 continue
-            if path.is_file() and path.is_relative_to(self.root) and not Workspace.is_secret(path):
+            inside = any(path.is_relative_to(d) for d in (self.root, *self.extra_dirs))
+            if path.is_file() and inside and not Workspace.is_secret(path):
                 files[candidate] = path.read_text(encoding="utf-8", errors="replace")
         return files
 
@@ -1126,7 +1174,7 @@ class TuiApp:
                     extras_private_dir(self.root)
                     runner = AgentRunner(self.orch, self.root, self.policy, approver=approver,
                                          checkpoints=self.checkpoints, hooks=self.hooks, mcp=self.mcp,
-                                         learn=self.learn)
+                                         learn=self.learn, extra_dirs=self.extra_dirs)
                     stream = runner.run(text, history=self.session.history, files=files, mode=mode,
                                         on_event=lambda e: events.put(("event", e)), cancel=cancel)
                 else:
@@ -1311,9 +1359,10 @@ def _style():
     })
 
 
-def run_tui(profile: str | None = None, continue_last: bool = False, permission_mode: str = "ask") -> None:
+def run_tui(profile: str | None = None, continue_last: bool = False, permission_mode: str = "ask",
+            add_dirs: list[Path] | None = None) -> None:
     session = None
     if continue_last:
         previous = list_sessions(str(Path.cwd().resolve()), limit=1)
         session = previous[0] if previous else None
-    TuiApp(profile=profile, session=session, permission_mode=permission_mode).loop()
+    TuiApp(profile=profile, session=session, permission_mode=permission_mode, extra_dirs=add_dirs).loop()

@@ -8,7 +8,7 @@ import os
 import re
 from pathlib import Path
 
-from ..tools.filesystem import Workspace
+from ..tools.filesystem import IGNORED_DIRS, Workspace, display_path
 
 MEMORY_FILES = ("MYDEVAGENT.md", "AGENTS.md", "CLAUDE.md")
 MAX_MEMORY_CHARS = 6000
@@ -169,6 +169,30 @@ class RepoMap:
             self.cache_path.write_text(json.dumps(self._cache), encoding="utf-8")
         except OSError:
             pass
+
+
+def extra_dirs_context(root: Path, dirs: list[Path], limit: int = 60) -> str:
+    """Le cartelle in più (/add-dir): dove sono, i loro primi file e la loro memoria."""
+    blocks = []
+    for folder in dirs:
+        files: list[str] = []
+        for current, subdirs, names in os.walk(folder):
+            subdirs[:] = sorted(d for d in subdirs if d not in IGNORED_DIRS and not d.startswith("."))
+            base = Path(current).relative_to(folder)
+            files += [(base / name).as_posix() for name in sorted(names) if not Workspace.is_secret(Path(name))]
+            if len(files) >= limit:
+                files = files[:limit] + ["…"]
+                break
+        memory = "\n".join(p.read_text(encoding="utf-8", errors="replace").strip()
+                           for p in (folder / name for name in MEMORY_FILES) if p.is_file())
+        label = display_path(root, folder)
+        blocks.append(f"## {label}\n" + ("\n".join(files) or "(empty)")
+                      + (f"\n### Project memory of {label}\n{memory[:2000]}" if memory else ""))
+    if not blocks:
+        return ""
+    return ("# Additional working directories\nBesides the project you can read, search and edit files in these "
+            "folders. Use their paths as written below (e.g. `" + display_path(root, dirs[0]) + "/file`), or "
+            "absolute paths with forward slashes.\n\n" + "\n\n".join(blocks))
 
 
 def project_context(root: Path, query: str = "", map_chars: int = MAX_MAP_CHARS) -> str:

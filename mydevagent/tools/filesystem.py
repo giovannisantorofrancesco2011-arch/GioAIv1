@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
 from pathlib import Path
 
@@ -18,16 +19,25 @@ class WorkspaceError(PermissionError):
     pass
 
 
+def display_path(root: Path, target: Path) -> str:
+    """Un percorso come lo scrive l'agente: relativo al progetto (anche ../altra-cartella/…), o assoluto."""
+    try:
+        return os.path.relpath(target, root).replace(os.sep, "/")
+    except ValueError:  # Windows: un altro disco
+        return Path(target).as_posix()
+
+
 class Workspace:
-    def __init__(self, root: str | Path, allow_write: bool = False) -> None:
+    def __init__(self, root: str | Path, allow_write: bool = False, extra: list[Path] | tuple = ()) -> None:
         self.root = Path(root).expanduser().resolve()
         self.allow_write = allow_write
+        self.extra = [Path(p).expanduser().resolve() for p in extra]  # cartelle in più (/add-dir)
 
     def resolve(self, path: str | Path) -> Path:
         candidate = (self.root / path).resolve()
-        if candidate != self.root and not candidate.is_relative_to(self.root):
-            raise WorkspaceError(f"path outside workspace: {path}")
-        return candidate
+        if any(candidate == base or candidate.is_relative_to(base) for base in (self.root, *self.extra)):
+            return candidate
+        raise WorkspaceError(f"path outside workspace: {path}")
 
     @staticmethod
     def is_secret(path: Path) -> bool:

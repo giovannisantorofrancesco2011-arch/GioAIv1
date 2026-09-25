@@ -29,7 +29,7 @@ from ..tools import preview
 from ..tools.web_fetch import UnsafeURLError, fetch_text
 from ..tools.web_search import format_results
 from .checkpoints import CheckpointStore
-from .context import project_context, read_memory
+from .context import extra_dirs_context, project_context, read_memory
 from .loop import AgentLoop
 from .permissions import Approver, PermissionPolicy
 from .tools import AgentTools
@@ -74,7 +74,8 @@ NO_CHANGES = ("The request asks to change the project, but you have not modified
 class AgentRunner:
     def __init__(self, orchestrator, root: Path, policy: PermissionPolicy, *, approver: Approver | None = None,
                  checkpoints: CheckpointStore | None = None, hooks: Hooks | None = None,
-                 mcp: McpManager | None = None, learn: bool = False) -> None:
+                 mcp: McpManager | None = None, learn: bool = False,
+                 extra_dirs: list[Path] | None = None) -> None:
         self.orch = orchestrator
         self.root = Path(root).resolve()
         self.policy = policy
@@ -83,6 +84,7 @@ class AgentRunner:
         self.hooks = hooks if hooks is not None else Hooks(self.root)
         self.mcp = mcp  # None: i server si creano per questa richiesta e si chiudono alla fine
         self.learn = learn  # modalità impara: spiega e lascia all'utente un pezzo da scrivere
+        self.extra_dirs = [Path(d).resolve() for d in extra_dirs or []]  # cartelle in più (/add-dir)
 
     def run(self, request: str, **kwargs) -> Iterator[str]:
         if self.mcp is not None:
@@ -126,6 +128,7 @@ class AgentRunner:
         hook_context = "\n".join(filter(None, (self.hooks.session_context, submitted.context)))
         base_context = "\n\n".join(p for p in (skills_prompt(skills), mcp.prompt(),
                                                 project_context(self.root, route.request),
+                                                extra_dirs_context(self.root, self.extra_dirs),
                                                 f"# Context from hooks\n{hook_context}" if hook_context else "")
                                      if p)
         context = "\n\n".join(p for p in (subagents_prompt(subagents), base_context,
@@ -134,8 +137,7 @@ class AgentRunner:
         def tools_for(allowed: set[str] | None = None, **extra) -> AgentTools:
             return AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
                               web_search=web_fn, web_fetch=fetch_fn, preview=preview_fn, memory=memory, skills=skills,
-                              hooks=self.hooks, mcp=mcp,
-                              allowed=allowed, **extra)
+                              hooks=self.hooks, mcp=mcp, allowed=allowed, extra_dirs=self.extra_dirs, **extra)
 
         def spawn(agent: SubAgent, prompt: str) -> tuple[str, AgentTools]:
             """Un sotto-agente: contesto suo, i suoi tool (senza `task`: niente sotto-sotto-agenti)."""

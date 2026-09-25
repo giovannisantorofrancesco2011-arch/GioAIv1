@@ -150,6 +150,33 @@ def test_web_fetch_pages_and_asks_once_per_site(project):
     assert offline.execute("web_fetch", {"url": "https://example.com"}).startswith("ERROR")
 
 
+def test_extra_dirs_read_edit_grep_undo(project, tmp_path):
+    from mydevagent.agent.context import extra_dirs_context
+
+    backend = tmp_path / "backend"
+    backend.mkdir()
+    (backend / "app.py").write_text("def ping():\n    return 'pong'\n")
+    (backend / ".env").write_text("SECRET=1\n")
+    (tmp_path / "altro.txt").write_text("fuori\n")
+    tools = AgentTools(project, PermissionPolicy(mode="auto", root=project), CheckpointStore(project),
+                       extra_dirs=[backend])
+    assert "def ping" in tools.execute("read_file", {"path": "../backend/app.py"})
+    assert "../backend/app.py:1:" in tools.execute("grep", {"pattern": "def ping"})
+    assert "../backend/app.py" in tools.execute("list_files", {"path": "../backend"})
+    assert tools.execute("read_file", {"path": "../backend/.env"}).startswith("ERROR")
+    assert tools.execute("read_file", {"path": "../altro.txt"}).startswith("ERROR")  # non è tra le cartelle
+    tools.checkpoints.begin("modifica il backend")
+    tools.execute("edit_file", {"path": (backend / "app.py").as_posix(), "old_string": "'pong'",
+                                "new_string": "'PONG'"})
+    assert "PONG" in (backend / "app.py").read_text() and tools.changed == ["../backend/app.py"]
+    assert "+    return 'PONG'" in tools.checkpoints.session_diff()
+    tools.checkpoints.undo()
+    assert "'pong'" in (backend / "app.py").read_text()
+    assert not (project / ".mydevagent" / "backend").exists()  # la copia resta dentro il checkpoint
+    context = extra_dirs_context(project, [backend])
+    assert "## ../backend" in context and "app.py" in context and ".env" not in context
+
+
 def test_detect_tests_and_run(project):
     assert detect_test_command(project) == "python -m pytest -q"
     assert detect_test_command(project, "## Comandi\n- test: `make check`") == "make check"

@@ -69,12 +69,13 @@ def main(
     profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
     continue_last: bool = typer.Option(False, "--continue", "-c", help="Riprendi l'ultima sessione in questa cartella"),
     permissions: str = typer.Option("ask", "--permissions", help="ask | auto-edit | plan | auto"),
+    add_dir: list[Path] = typer.Option(None, "--add-dir", help="Un'altra cartella su cui lavorare (ripetibile)"),
 ) -> None:
     """Senza sottocomando apre l'interfaccia interattiva stile Claude Code."""
     if ctx.invoked_subcommand is None:
         from .tui import run_tui
 
-        run_tui(profile, continue_last=continue_last, permission_mode=permissions)
+        run_tui(profile, continue_last=continue_last, permission_mode=permissions, add_dirs=add_dir)
 
 
 @app.command()

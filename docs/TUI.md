@@ -82,6 +82,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/diff` | tutte le modifiche fatte ai file in questa sessione |
 | `/agent` · `/chat` | lavora sui file · rispondi soltanto |
 | `/apply` | (chat) scrive i file dell'ultima risposta dopo il diff |
+| `/add-dir [cartella]` · `/add-dir rimuovi <cartella>` | lavora anche su altre cartelle (es. frontend e backend) |
 | `/anteprima [file \| url]` | apre nel browser il sito del progetto, servito su localhost |
 | `/impara` · `/impara off` | modalità impara: spiega cosa fa e ti lascia scrivere un pezzo di codice |
 | `/new [modello] [nome]` | crea un progetto pronto (sito, gioco, bot-discord, api, python) e ci lavora dentro |
@@ -118,6 +119,21 @@ Il progetto nasce nella cartella aperta se è vuota, altrimenti in una sottocart
 cartella di MyDevAgent: lì va accanto). Ogni modello ha già il suo `MYDEVAGENT.md` con i comandi per
 avviarlo e provarlo, un `.gitignore` e `git init`. Poi basta dire cosa vuoi cambiare: «fai il sito sui
 miei disegni», «aggiungi i nemici al gioco».
+
+## Più cartelle insieme: `/add-dir`
+Quando un progetto sta in più cartelle (il sito in `frontend`, il server in `backend`), apri MyDevAgent in
+una e aggiungi le altre, come in Claude Code:
+
+```
+/add-dir ../backend          aggiunge una cartella (ricordata per questo progetto)
+/add-dir                     mostra le cartelle
+/add-dir rimuovi ../backend  la toglie
+mydevagent --add-dir ../backend   solo per questa volta
+```
+
+L'agente vede l'elenco dei file e la memoria (`MYDEVAGENT.md`) di ogni cartella, e le usa con percorsi come
+`../backend/app.py`: legge, cerca (`grep` guarda in tutte), modifica con i soliti permessi, e `/undo` annulla
+anche lì. Puoi allegare i loro file con `@../backend/app.py`. I comandi partono dalla cartella principale.
 
 ## Anteprima dei siti
 Quando l'agente cambia una pagina web la guarda da solo, con lo strumento **Anteprima**: la apre su

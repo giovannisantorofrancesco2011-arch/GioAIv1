@@ -72,6 +72,7 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 | Progetti pronti: sito, gioco Pygame, bot Discord, API FastAPI, programma Python con i test | MyDevAgent | `/new` |
 | Modalità impara: spiega cosa fa e ti lascia scrivere un pezzo di codice (`TODO(tu)`) | Claude Code (stile Learning) | `/impara` |
 | Anteprima dei siti su localhost: l'agente apre la pagina, la guarda (screenshot + modello vision) e legge gli errori della console | Claude Code + Playwright MCP | `/anteprima`, automatica |
+| Più cartelle insieme (es. frontend e backend): l'agente legge, cerca e modifica in tutte | Claude Code | `/add-dir`, `--add-dir` |
 | Compattazione della conversazione | Claude Code | `/compact`, automatica |
 | Team multi-agente con review sul diff reale e dibattito sul piano | MyDevAgent | `/balanced` `/deep` `/ultra-deep` |
 

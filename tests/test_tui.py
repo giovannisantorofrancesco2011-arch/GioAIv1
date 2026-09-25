@@ -334,3 +334,27 @@ def test_preview_command(settings, project, monkeypatch):
     assert opened[0].startswith("http://127.0.0.1:") and opened[0].endswith("/index.html")
     assert opened[1] == "http://localhost:5173" and len(opened) == 2
     assert "non trovo manca.html" in console.export_text()
+
+
+def test_add_dir_command(settings, project, tmp_path):
+    backend = tmp_path / "backend"
+    backend.mkdir()
+    (backend / "app.py").write_text("x = 1\n")
+    console = record_console()
+
+    def make_app(**kwargs):
+        with create_pipe_input() as pipe:
+            return TuiApp(Orchestrator(settings, llm=FakeLLM()), console=console, prompt_input=pipe,
+                          prompt_output=DummyOutput(), root=project, background=False, **kwargs)
+
+    app = make_app()
+    app.handle_command("/add-dir ../backend")
+    app.handle_command("/add-dir ../nessuna")
+    assert app.extra_dirs == [backend.resolve()] and "non trovo la cartella" in console.export_text()
+    assert app.collect_attachments("guarda @../backend/app.py") == {"../backend/app.py": "x = 1\n"}
+    again = make_app()  # ricordata per questo progetto
+    assert again.extra_dirs == [backend.resolve()]
+    again.handle_command("/add-dir rimuovi ../backend")
+    assert again.extra_dirs == [] and make_app().extra_dirs == []
+    once = make_app(extra_dirs=[backend])  # mydevagent --add-dir: solo per questa volta
+    assert once.extra_dirs == [backend.resolve()] and make_app().extra_dirs == []

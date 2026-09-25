@@ -33,6 +33,12 @@ class CheckpointStore:
     def _dir(self, cp_id: int) -> Path:
         return self.base / f"{cp_id:04d}"
 
+    def _copy(self, cp_id: int, rel: str) -> Path:
+        """Dove sta la copia di un file: anche ../altra-cartella/… e C:/… restano dentro il checkpoint."""
+        parts = ["__up__" if p == ".." else p.replace(":", "_") for p in rel.replace("\\", "/").split("/")
+                 if p not in ("", ".")]
+        return self._dir(cp_id) / "files" / Path(*parts)
+
     def before_write(self, rel_path: str) -> None:
         """Salva lo stato originale del file (una volta per turno) prima di modificarlo."""
         if self.current is None:
@@ -44,7 +50,7 @@ class CheckpointStore:
         existed = source.is_file()
         folder = self._dir(cp.id)
         if existed:
-            target = folder / "files" / rel_path
+            target = self._copy(cp.id, rel_path)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
         cp.files[rel_path] = existed
@@ -72,7 +78,7 @@ class CheckpointStore:
             target = self.root / rel
             if existed:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(self._dir(cp.id) / "files" / rel, target)
+                shutil.copy2(self._copy(cp.id, rel), target)
             elif target.exists():
                 target.unlink()
             restored.append(rel)
@@ -106,7 +112,7 @@ class CheckpointStore:
             for rel, existed in cp.files.items():
                 if rel in originals:
                     continue
-                path = self._dir(cp.id) / "files" / rel
+                path = self._copy(cp.id, rel)
                 originals[rel] = path.read_text(encoding="utf-8", errors="replace") if existed else None
         chunks = []
         for rel, old in sorted(originals.items()):
