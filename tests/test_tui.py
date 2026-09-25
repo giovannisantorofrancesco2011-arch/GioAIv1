@@ -222,7 +222,7 @@ def test_vio_reacts_to_modes(settings, project):
     with create_pipe_input() as pipe:
         app = TuiApp(Orchestrator(settings, llm=FakeLLM()), console=record_console(), prompt_input=pipe,
                      prompt_output=DummyOutput(), root=project, background=False)
-    assert app.vio_state()[1].startswith("Ciao!")
+    assert app.vio_state()[1].startswith("Ciao, sono Vio!")
     app.policy.next_mode()  # Shift+Tab: Vio cambia faccia e frase
     assert app.vio_state() == ("auto-edit", mascot.SAYS["auto-edit"])
     app.handle_command("/plan")
