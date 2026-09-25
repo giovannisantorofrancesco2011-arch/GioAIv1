@@ -10,6 +10,7 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 app = typer.Typer(add_completion=False,
@@ -91,11 +92,22 @@ def ask(
         request = sys.stdin.read()
     orch = _orchestrator(profile)
     on_event = _event_printer(err, quiet)
-    for chunk in orch.run(request, files=_read_files(file), images=_images(image), mode=mode,
-                          on_event=on_event, show_thinking=think):
-        sys.stdout.write(chunk)
-        sys.stdout.flush()
+    try:
+        for chunk in orch.run(request, files=_read_files(file), images=_images(image), mode=mode,
+                              on_event=on_event, show_thinking=think):
+            sys.stdout.write(chunk)
+            sys.stdout.flush()
+    except Exception as exc:
+        _print_error(err, exc, orch.settings)
+        raise typer.Exit(1) from None
     sys.stdout.write("\n")
+
+
+def _print_error(target: Console, exc: Exception, settings) -> None:
+    from .health import explain_error
+
+    title, hint = explain_error(exc, settings)
+    target.print(f"\n[red]✗ {escape(title)}[/red]\n[dim]→ {escape(hint)}[/dim]")
 
 
 CHAT_HELP = """[bold]Comandi[/bold]: /fast /balanced /deep /auto (modalità) · /file <path> (allega) · /image <path>
@@ -177,7 +189,7 @@ def chat(
         except KeyboardInterrupt:
             console.print("\n[yellow]interrotto[/yellow]")
         except Exception as exc:
-            console.print(f"\n[red]Errore: {type(exc).__name__}: {exc}[/red]\n[dim]Prova `mydevagent doctor`.[/dim]")
+            _print_error(console, exc, orch.settings)
             continue
         images = []  # le immagini valgono per un solo turno
         history += [{"role": "user", "content": text}, {"role": "assistant", "content": "".join(answer)}]
@@ -307,9 +319,15 @@ def doctor(profile: str = typer.Option(None, "--profile", "-p")) -> None:
     """Verifica backend LLM, modelli, connessione, ricerca web, sandbox e indice RAG."""
     import os
 
-    import httpx
-
-    from .config import TIERS, load_settings
+    from .config import load_settings
+    from .health import (
+        OPTIONAL_TIERS,
+        check_backends,
+        detect_hardware,
+        is_ollama,
+        recommend_profile,
+        start_hint,
+    )
     from .tools.connectivity import Connectivity
     from .tools.sandbox import Sandbox
     from .tools.web_search import PROVIDERS
@@ -320,30 +338,26 @@ def doctor(profile: str = typer.Option(None, "--profile", "-p")) -> None:
     warn = "[yellow]![/yellow]"
     console.print(f"[bold]Profilo[/bold]: {settings.profile}")
 
-    backends: dict[str, set[str] | None] = {}
-    missing: list[str] = []
-    for tier in TIERS:
-        model, backend = settings.resolve_model(tier)
-        if backend.base_url not in backends:
-            try:
-                resp = httpx.get(backend.base_url.rstrip("/") + "/models",
-                                 headers={"Authorization": f"Bearer {backend.api_key}"}, timeout=3)
-                resp.raise_for_status()
-                backends[backend.base_url] = {m["id"] for m in resp.json().get("data", [])}
-                console.print(f"{ok} backend raggiungibile: {backend.base_url}")
-            except Exception as exc:
-                backends[backend.base_url] = None
-                console.print(f"{ko} backend non raggiungibile: {backend.base_url} ({type(exc).__name__})")
-        available = backends[backend.base_url]
-        if available is None:
+    health = check_backends(settings, timeout=3)
+    for url, reachable in health.reachable.items():
+        if reachable:
+            console.print(f"{ok} backend raggiungibile: {url}")
+        else:
+            console.print(f"{ko} backend non raggiungibile: {url} — {start_hint(url)}")
+    for status in health.tiers:
+        if status.installed is None:
             continue
-        present = model in available or f"{model}:latest" in available
-        console.print(f"  {ok if present else warn} {tier:<9} {model}")
-        if not present:
-            missing.append(model)
-    if missing and "11434" in settings.backends[settings.default_backend].base_url:
+        optional = " [dim](opzionale)[/dim]" if status.tier in OPTIONAL_TIERS else ""
+        console.print(f"  {ok if status.installed else warn} {status.tier:<9} {status.model}{optional}")
+    missing = [s.model for s in health.missing()]
+    if missing and is_ollama(settings.backends[settings.default_backend].base_url):
         console.print("  [dim]scarica i modelli mancanti:[/dim] " + " && ".join(f"ollama pull {m}"
                                                                            for m in dict.fromkeys(missing)))
+    hw = detect_hardware()
+    best = recommend_profile(hw)
+    same = best == settings.profile
+    console.print(f"{ok if same else warn} hardware: {hw.describe()} → profilo consigliato [bold]{best}[/bold]"
+                  + ("" if same else f" (ora usi {settings.profile}: `mydevagent -p {best}`)"))
 
     online = Connectivity(settings.tools.connectivity).online()
     console.print(f"{ok if online else warn} internet: {'online' if online else 'offline (ricerca web disattivata)'}")

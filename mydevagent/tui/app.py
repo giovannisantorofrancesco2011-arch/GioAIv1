@@ -28,6 +28,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
+from .. import health
 from ..agent import CheckpointStore, PermissionPolicy
 from ..agent.context import append_memory, read_memory
 from ..agent.permissions import MODE_LABELS, ApprovalRequest
@@ -61,8 +62,9 @@ COMMANDS = {
     "/init": "crea MYDEVAGENT.md con comandi e convenzioni del progetto",
     "/memory": "mostra la memoria del progetto · /memory <testo> aggiunge una nota",
     "/compact": "riassume la conversazione per liberare contesto",
-    "/model": "cambia modello principale · /model <nome>",
+    "/model": "cambia modello principale · /model <nome> [--save]",
     "/models": "modelli installati e modelli in uso",
+    "/pull": "scarica un modello da Ollama · /pull <nome>",
     "/agents": "elenca gli agenti",
     "/files": "file allegati all'ultimo messaggio",
     "/cost": "token e tempo della sessione",
@@ -97,6 +99,7 @@ class TuiApp:
         permission_mode: str = "ask",
         agent_mode: bool = True,
         background: bool = True,
+        startup_check: bool | None = None,
     ) -> None:
         self.orch = orchestrator or Orchestrator(load_settings(overrides={"profile": profile} if profile else None))
         self.console = console or Console()
@@ -119,6 +122,7 @@ class TuiApp:
         self.online: bool | None = None
         self.branch = self._git_branch()
         self._ask = ask
+        self._startup_check = background if startup_check is None else startup_check
         self._ctrl_c_at = 0.0
         self.custom = extras.custom_commands(self.root)
         self._load_prefs()
@@ -172,12 +176,14 @@ class TuiApp:
     def _prefs_path(self) -> Path:
         return state_dir() / "config.json"
 
-    def _load_prefs(self) -> None:
+    def _prefs(self) -> dict[str, Any]:
         try:
-            prefs = json.loads(self._prefs_path().read_text(encoding="utf-8"))
+            return json.loads(self._prefs_path().read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            prefs = {}
-        set_theme(prefs.get("theme", "dark"))
+            return {}
+
+    def _load_prefs(self) -> None:
+        set_theme(self._prefs().get("theme", "dark"))
 
     def _save_pref(self, key: str, value: Any) -> None:
         path = self._prefs_path()
@@ -369,15 +375,27 @@ class TuiApp:
             if not arg:
                 c.print(f"[dim]⎿  modello principale: {self.model} · /models per l'elenco[/]")
             else:
+                save = "--save" in arg.split()
+                name = " ".join(w for w in arg.split() if w != "--save")
                 profile = self.orch.settings.active_profile
-                profile.main = arg
+                profile.main = name
                 if isinstance(profile.reasoning, str) and profile.reasoning == self.model:
-                    profile.reasoning = arg
-                self.model = arg
-                c.print(f"[dim]⎿  modello principale: {escape(arg)} (solo per questa sessione)[/]")
+                    profile.reasoning = name
+                self.model = name
+                if save:
+                    path = health.save_env({"MYDEVAGENT_MODEL_MAIN": name})
+                    c.print(f"[dim]⎿  modello principale: {escape(name)} (salvato in {escape(str(path))})[/]")
+                else:
+                    c.print(f"[dim]⎿  modello principale: {escape(name)} (solo per questa sessione · "
+                            "--save per ricordarlo)[/]")
                 extras.warmup(self.orch.llm, self.orch.settings)
         elif cmd == "/models":
             self._models()
+        elif cmd == "/pull":
+            if not arg:
+                c.print("[dim]⎿  uso: /pull <nome>, es. /pull qwen2.5-coder:7b[/]")
+            else:
+                self.pull_models(arg.split())
         elif cmd == "/agents":
             table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
             for col in ("#", "agente", "gruppo", "stage", "alias"):
@@ -454,6 +472,131 @@ class TuiApp:
             table.add_row(tier, model, "[green]✓[/]" if ok else f"[red]✗ ollama pull {model}[/]")
         self.console.print(table)
         self.console.print("[dim]Installati: " + ", ".join(sorted(installed)) + "[/]")
+
+    # ------------------------------------------------------ controllo iniziale
+    def startup_check(self) -> health.Health:
+        """Backend spento o modelli mancanti → spiega cosa fare e offre di sistemarlo. Silenzioso se è tutto ok."""
+        settings = self.orch.settings
+        status = health.check_backends(settings)
+        while status.down:
+            urls = ", ".join(status.down)
+            hint = health.start_hint(status.down[0])
+            self.console.print(Panel(
+                f"[bold]Il server dei modelli non risponde[/] su {escape(urls)}\n\n"
+                f"Per avviarlo: {escape(hint)}.\n"
+                "Se non l'hai ancora installato: https://ollama.com/download",
+                title="MyDevAgent non riesce a partire", border_style="red", expand=False, padding=(0, 2)))
+            answer = self._reply("  Invio per riprovare · c per continuare comunque › ")
+            if answer.lower().startswith(("c", "q", "3")):
+                return status
+            status = health.check_backends(settings)
+        missing = status.missing()
+        if missing:
+            self._offer_missing(status, missing)
+        self._hardware_hint()
+        return status
+
+    def _offer_missing(self, status: health.Health, missing: list[health.TierStatus]) -> None:
+        settings = self.orch.settings
+        essential = [m for m in missing if m.tier in health.ESSENTIAL_TIERS]
+        tiers_by_model: dict[str, list[str]] = {}
+        for m in missing:
+            tiers_by_model.setdefault(m.model, []).append(m.tier)
+        lines = []
+        for model, tiers in tiers_by_model.items():
+            size = health.model_size(model)
+            weight = f" · circa {size * 0.6 + 0.4:.1f} GB" if size else ""
+            note = "" if set(tiers) & set(health.ESSENTIAL_TIERS) else " [dim](opzionale)[/]"
+            lines.append(f"  [red]✗[/] {escape(model)} [dim]({', '.join(tiers)}{weight})[/]{note}")
+        to_pull = list(dict.fromkeys(m.model for m in (essential or missing)))
+        subs = health.substitutes(status)
+        can_pull = health.is_ollama(missing[0].base_url)
+        options = []
+        if can_pull:
+            options.append(("1", "Scaricali ora" + (" (solo quelli necessari)" if len(to_pull) < len(tiers_by_model)
+                                                    else "")))
+        if subs:
+            used = ", ".join(f"{t}: {escape(m)}" for t, m in subs.items())
+            options.append(("2", f"Usa i modelli che ho già ({used})"))
+        options.append(("3", "Continua comunque"))
+        title = "Mancano dei modelli" if essential else "Mancano dei modelli opzionali"
+        body = (f"[bold]Il profilo {settings.profile} usa modelli che non sono installati:[/]\n"
+                + "\n".join(lines) + "\n\n" + "\n".join(f"  [bold]{k}[/] {v}" for k, v in options))
+        if not essential:
+            body += "\n\n[dim]Senza questi MyDevAgent funziona lo stesso (ricerca nel codice senza embedding).[/]"
+        self.console.print(Panel(body, title=title, border_style="yellow", expand=False, padding=(0, 2)))
+        choice = self._reply("  scelta › ")
+        if choice == "1" and can_pull:
+            if self.pull_models(to_pull):
+                extras.warmup(self.orch.llm, settings)
+        elif choice == "2" and subs:
+            health.apply_substitutes(settings, subs)
+            self.model = settings.resolve_model("main")[0]
+            self.console.print(f"[green]⏺[/] Uso i modelli installati · modello principale: {escape(self.model)}")
+            save = self._reply("  Ricordare questa scelta per le prossime volte? (s/N) › ")
+            if save.lower().startswith(("s", "y", "1")):
+                path = health.save_env({f"MYDEVAGENT_MODEL_{t.upper()}": m for t, m in subs.items()})
+                self.console.print(f"  [dim]⎿  salvato in {escape(str(path))}[/]")
+            extras.warmup(self.orch.llm, settings)
+        elif essential:
+            self.console.print("[dim]⎿  Ok. Quando vuoi: /pull <nome> scarica un modello, /model <nome> lo cambia.[/]")
+
+    def _hardware_hint(self) -> None:
+        """Una volta sola: se il profilo non è adatto all'hardware, lo dice."""
+        prefs = self._prefs()
+        if prefs.get("hardware_hint"):
+            return
+        hw = health.detect_hardware()
+        best = health.recommend_profile(hw)
+        current = self.orch.settings.profile
+        if best != current and current in health.PROFILE_ORDER:
+            self.console.print(f"[yellow]⏺[/] Su questo PC ({escape(hw.describe())}) ti consiglio il profilo "
+                               f"[bold]{best}[/] (ora usi {escape(current)}).\n  [dim]⎿  prova `mydevagent -p {best}` oppure "
+                               f"MYDEVAGENT_PROFILE={best} nel file .env[/]")
+        self._save_pref("hardware_hint", True)
+
+    def pull_models(self, models: list[str]) -> bool:
+        """Scarica i modelli da Ollama con barra di avanzamento. True se tutti scaricati."""
+        from rich.progress import (
+            BarColumn,
+            DownloadColumn,
+            Progress,
+            TextColumn,
+            TimeRemainingColumn,
+            TransferSpeedColumn,
+        )
+
+        base_url = self.orch.settings.resolve_model("main")[1].base_url
+        if not health.is_ollama(base_url):
+            self.console.print(f"[red]⎿  /pull funziona solo con Ollama (backend attuale: {escape(base_url)})[/]")
+            return False
+        all_ok = True
+        for model in dict.fromkeys(models):
+            columns = (TextColumn("  [bold]{task.description}[/]"), BarColumn(), DownloadColumn(),
+                       TransferSpeedColumn(), TimeRemainingColumn())
+            try:
+                with Progress(*columns, console=self.console, transient=True) as progress:
+                    task = progress.add_task(model, total=None)
+
+                    def update(status: str, done: int, total: int, task=task, progress=progress, model=model) -> None:
+                        label = model if status.startswith("pulling") else f"{model} · {status}"
+                        progress.update(task, description=label, completed=done, total=total or None)
+
+                    health.pull_model(base_url, model, update)
+            except KeyboardInterrupt:
+                self.console.print(f"[yellow]⎿  download di {escape(model)} interrotto[/]")
+                return False
+            except Exception as exc:
+                _, hint = health.explain_error(exc, self.orch.settings)
+                self.console.print(f"[red]⏺ Download di {escape(model)} non riuscito: {escape(str(exc))}[/]\n"
+                                   f"  [dim]⎿  controlla il nome su https://ollama.com/library · {escape(hint)}[/]")
+                all_ok = False
+                continue
+            self.console.print(f"[green]⏺[/] Scaricato {escape(model)}")
+        return all_ok
+
+    def _reply(self, message: str) -> str:
+        return self._ask(message) if self._ask else self._input(message)
 
     def _index(self) -> None:
         from ..tools.rag import CodeIndex
@@ -578,7 +721,7 @@ class TuiApp:
                 for chunk in stream:
                     events.put(("chunk", chunk))
             except Exception as exc:
-                events.put(("error", f"{type(exc).__name__}: {exc}"))
+                events.put(("error", exc))
             finally:
                 events.put(("done", None))
 
@@ -629,8 +772,8 @@ class TuiApp:
                         watcher.__enter__()
                         live.start()
                     elif kind == "error":
-                        self.console.print(f"[red]⏺ Errore: {escape(value)}[/]\n  [dim]⎿  prova /models o "
-                                           "/doctor[/]")
+                        title, hint = health.explain_error(value, self.orch.settings)
+                        self.console.print(f"[red]⏺ {escape(title)}[/]\n  [dim]⎿  {escape(hint)}[/]")
                     elif kind == "chunk":
                         renderer.on_chunk(value)
                     else:
@@ -658,6 +801,8 @@ class TuiApp:
     # --------------------------------------------------------------- loop
     def loop(self) -> None:
         self.banner()
+        if self._startup_check:
+            self.startup_check()
         while True:
             self.console.print()
             try:

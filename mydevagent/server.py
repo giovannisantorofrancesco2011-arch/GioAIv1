@@ -15,6 +15,7 @@ import time
 import uuid
 from typing import Any
 
+from .health import explain_error
 from .orchestrator import Orchestrator
 from .state import PROGRESS_MARKER
 
@@ -112,7 +113,8 @@ def create_app(orchestrator: Orchestrator | None = None):
                 for chunk in orch.run(text, history=history, images=images, mode=mode, on_event=on_event):
                     out.put(("text", chunk))
             except Exception as exc:
-                out.put(("error", f"{type(exc).__name__}: {exc}"))
+                title, hint = explain_error(exc, orch.settings)
+                out.put(("error", f"{title} ({hint})"))
             finally:
                 out.put(("done", None))
 

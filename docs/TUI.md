@@ -83,7 +83,8 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/init` | l'agente analizza il progetto e crea `MYDEVAGENT.md` (comandi, architettura, convenzioni) |
 | `/memory [testo]` | mostra la memoria del progetto · aggiunge una nota |
 | `/compact` | riassume la conversazione (automatico oltre 10 turni) |
-| `/model <nome>` · `/models` | cambia modello per la sessione · modelli installati e in uso |
+| `/model <nome>` · `/models` | cambia modello per la sessione (`--save` lo ricorda nel `.env`) · modelli installati e in uso |
+| `/pull <nome>` | scarica un modello da Ollama con barra di avanzamento |
 | `/agents` | i 35 agenti (nucleo e ultra) |
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
 | `/index` | indicizza il progetto per la ricerca semantica (di solito lo fa da solo in background) |
@@ -126,3 +127,16 @@ Integratore capo, fino a 3 giri di correzione, documentazione e release. Le fasi
 ### Aggiungere un comando
 Aggiungi nome e descrizione a `COMMANDS` in `app.py` e gestiscilo in `TuiApp.handle_command`
 (oppure, senza codice, crea un comando personalizzato come sopra).
+
+## Controllo all'avvio
+Appena si apre, la UI controlla in meno di 2 secondi il server dei modelli e i modelli del profilo. Se è tutto a
+posto non mostra niente. Altrimenti:
+- **server spento** → spiega come avviarlo (`ollama serve`, l'app Ollama o LM Studio); Invio per riprovare;
+- **modelli mancanti** → elenco con dimensione indicativa e tre scelte: **1** scaricarli ora (barra di
+  avanzamento), **2** usare i modelli già installati più adatti (con l'opzione di ricordare la scelta nel `.env`),
+  **3** continuare;
+- **profilo non adatto all'hardware** → un consiglio, mostrato una volta sola (es. «Hai una GPU da 12 GB: ti
+  consiglio gpu16»).
+
+Anche gli errori durante l'uso sono spiegati in italiano con il rimedio (modello non installato, server non
+raggiungibile, modello troppo lento, memoria insufficiente), nella UI, in `mydevagent ask` e nel server.

@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 # MyDevAgent — installazione rapida (Linux/macOS).  Uso:  ./scripts/install.sh [cpu|gpu8|gpu16|gpu24]
+# Senza profilo lo sceglie in base alla GPU.
 set -euo pipefail
-PROFILE="${1:-gpu8}"
+detect_profile() {  # stessa logica di `mydevagent doctor`: VRAM NVIDIA o memoria unificata Apple Silicon
+  local gb=0
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    gb=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -n | tail -1 | awk '{printf "%d", $1/1024}')
+  elif [[ "$(uname)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+    gb=$(sysctl -n hw.memsize | awk '{printf "%d", $1/1073741824*0.7}')
+  fi
+  gb=${gb:-0}
+  if (( gb >= 22 )); then echo gpu24; elif (( gb >= 14 )); then echo gpu16; elif (( gb >= 7 )); then echo gpu8; else echo cpu; fi
+}
+PROFILE="${1:-$(detect_profile)}"
+[[ -n "${1:-}" ]] || echo "==> Profilo rilevato dall'hardware: $PROFILE (per sceglierlo: ./scripts/install.sh gpu8)"
 cd "$(dirname "$0")/.."
 
 case "$PROFILE" in
@@ -55,6 +67,7 @@ mydevagent doctor || true
 cat <<MSG
 
 Fatto! Prossimi passi:
+  ./run.sh                        # avvia MyDevAgent (anche da un'altra cartella: /percorso/run.sh)
   source .venv/bin/activate
   mydevagent                      # interfaccia interattiva nel terminale
   mydevagent serve                # server OpenAI-compatibile su http://127.0.0.1:8000/v1

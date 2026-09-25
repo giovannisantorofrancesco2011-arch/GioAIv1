@@ -74,10 +74,13 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 ### Automatica
 ```bash
 git clone <questo-repo> mydevagent && cd mydevagent
-./scripts/install.sh gpu8          # cpu | gpu8 | gpu16 | gpu24     (Windows: scripts\install.ps1 -HwProfile gpu8)
-source .venv/bin/activate
-mydevagent
+./scripts/install.sh               # sceglie il profilo in base alla GPU; oppure: ./scripts/install.sh gpu8
+./run.sh                           # avvia MyDevAgent, senza attivare l'ambiente virtuale
 ```
+Su Windows: `powershell -ExecutionPolicy Bypass -File scripts\install.ps1`, poi `run.bat`.
+
+Per usarlo su un tuo progetto, lancia `run.sh` (o `run.bat`) dalla cartella del progetto:
+`cd ~/code/il-mio-progetto && ~/mydevagent/run.sh`. Se MyDevAgent non è ancora installato, `run.sh` lo installa.
 
 ### Manuale
 ```bash
@@ -102,7 +105,21 @@ mydevagent
 | `gpu16` | GPU 12–16 GB | qwen2.5-coder:14b |
 | `gpu24` | GPU 24 GB / Mac 32 GB+ | qwen3-coder:30b (MoE, velocissimo) |
 
-Cambia profilo con `MYDEVAGENT_PROFILE=gpu16` in `.env` o `mydevagent -p gpu16`.
+Cambia profilo con `MYDEVAGENT_PROFILE=gpu16` in `.env` o `mydevagent -p gpu16`. `mydevagent doctor` ti dice
+quale profilo è adatto al tuo hardware.
+
+### Se non parte
+All'apertura MyDevAgent controlla da solo il server dei modelli e i modelli del profilo, e ti propone cosa fare.
+
+| Problema | Soluzione |
+|---|---|
+| `permission denied` su `run.sh` o `install.sh` | `bash run.sh` (oppure `chmod +x run.sh scripts/install.sh`) |
+| `mydevagent: comando non trovato` | usa `./run.sh`, oppure attiva l'ambiente: `source .venv/bin/activate` (Windows: `run.bat`) |
+| «Il server dei modelli non risponde» | avvia Ollama: `ollama serve`, o apri l'app Ollama su Windows/macOS |
+| «Il modello … non è installato» (errore 404) | all'avvio scegli **Scaricali ora** o **Usa i modelli che ho già**; nella UI: `/pull <nome>`, `/model <nome> --save` |
+| «Il modello è troppo lento» / «non entra in memoria» | profilo più piccolo (`mydevagent -p cpu`) o `/fast`; `mydevagent bench` misura la velocità |
+
+`mydevagent doctor` (o `/doctor` nella UI) mostra tutto in una volta: backend, modelli, hardware, rete, sandbox.
 
 ## Uso
 
