@@ -130,7 +130,7 @@ class TuiApp:
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
         self._vio_event: tuple[str | None, str, tuple] | None = None
-        self.say("Ciao! Chiedimi di modificare il codice: leggo, modifico, lancio i test e ti mostro i diff.")
+        self.say("Ciao, sono Vio! Scrivi qui sotto cosa vuoi fare.")
         self.prompt = self._build_prompt(prompt_input, prompt_output, animate=background)
         if background:
             threading.Thread(target=self._check_online, daemon=True).start()
@@ -308,14 +308,22 @@ class TuiApp:
         from .. import __version__
 
         settings = self.orch.settings
-        memory = "MYDEVAGENT.md ✓" if read_memory(self.root) else "nessuna memoria (/init)"
+        memory = "MYDEVAGENT.md ✓" if read_memory(self.root) else "nessuna memoria (/init per crearla)"
+        tiers = " · ".join(f"{t} {settings.resolve_model(t)[0]}" for t in ("fast", "reasoning"))
         body = (
-            f"[bold {ACCENT}]✻ MyDevAgent[/] [dim]v{__version__} · {len(self.orch.registry)} agenti · local-first[/]\n"
-            f"  [bold]{escape(self.model)}[/] [dim]· profilo {settings.profile} · {self._hardware} · {memory}[/]\n"
-            f"  [dim]{escape(str(self.root))}[/]"
+            f"[bold {ACCENT}]✻[/] [bold]Benvenuto in MyDevAgent[/]  [dim]v{__version__} · "
+            f"{len(self.orch.registry)} agenti · local-first[/]\n\n"
+            f"[dim]cwd:[/]      {escape(str(self.root))}\n"
+            f"[dim]profilo:[/]  {settings.profile} · [dim]modello:[/] {escape(self.model)} [dim]· {escape(tiers)}[/]\n"
+            f"[dim]hardware:[/] {self._hardware}\n"
+            f"[dim]memoria:[/]  {memory}\n\n"
+            "[dim]Suggerimenti:[/]\n"
+            f"  [{ACCENT}]•[/] chiedi di modificare il codice: l'agente legge, modifica, lancia i test e ti mostra i diff\n"
+            f"  [{ACCENT}]•[/] [bold]/[/] comandi · [bold]@file[/] allega · [bold]![/]shell · [bold]#[/]nota in memoria\n"
+            f"  [{ACCENT}]•[/] [bold]Shift+Tab[/] modalità · [bold]Esc[/] interrompe · [bold]/undo[/] annulla · "
+            "[bold]Esc Esc[/] torna indietro · [bold]/vio[/] saluta la mascotte"
         )
-        self.console.print(Panel(body, border_style=ACCENT, expand=False, padding=(0, 1),
-                                 title="[dim]Benvenuto in MyDevAgent[/]", title_align="left"))
+        self.console.print(Panel(body, border_style=ACCENT, padding=(1, 2)))
         if self.session.history:
             turns = len(self.session.history) // 2
             self.console.print(f"[dim]⎿  Ripresa sessione «{escape(self.session.title)}» ({turns} turni)[/]")
