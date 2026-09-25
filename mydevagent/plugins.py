@@ -1,6 +1,6 @@
 """Plugin nel formato di Claude Code: una cartella con `.claude-plugin/plugin.json` e dentro `commands/`
 (comandi `/nome`), `skills/` (skill) e `agents/` (agenti specializzati, per MyDevAgent sono skill).
-`hooks/` e `.mcp.json` vengono riconosciuti ma non ancora usati.
+`hooks/` (vedi hooks.py) e `.mcp.json`.
 
 Da dove arrivano: `.mydevagent/plugins/` del progetto, `~/.mydevagent/plugins/` (dove li mette
 `/plugin install`), i plugin installati in Claude Code (`~/.claude/plugins/installed_plugins.json`) e le
@@ -48,7 +48,7 @@ class Plugin:
     def count(self, kind: str) -> int:
         return sum(1 for d in self.dirs(kind) for _ in d.glob(PATTERNS[kind]))
 
-    def unsupported(self) -> list[str]:
+    def features(self) -> list[str]:
         out = []
         if (self.path / "hooks").is_dir() or self.manifest.get("hooks"):
             out.append("hook")

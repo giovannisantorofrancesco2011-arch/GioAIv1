@@ -46,7 +46,8 @@ class AgentResult:
 class AgentLoop:
     def __init__(self, llm, tools: AgentTools, *, system: str, tier: str = "main", max_steps: int = 25,
                  max_tokens: int = 2048, temperature: float = 0.1, native: bool = False,
-                 context_chars: int = 48_000, emit=None, cancel: threading.Event | None = None) -> None:
+                 context_chars: int = 48_000, emit=None, cancel: threading.Event | None = None,
+                 stop_event: str = "Stop") -> None:
         self.llm = llm
         self.tools = tools
         self.tier = tier
@@ -61,6 +62,8 @@ class AgentLoop:
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": f"{system}\n\n{AGENT_RULES}{protocol}"}]
         self.result = AgentResult(text="")
         self.nudged = False
+        self.stop_event = stop_event  # hook da eseguire quando l'agente vuole fermarsi (SubagentStop per i sotto-agenti)
+        self.stop_hook_active = False
 
     # ------------------------------------------------------------------ API
     def run(self, task: str) -> AgentResult:
@@ -107,6 +110,10 @@ class AgentLoop:
                     self.emit({"type": "info", "text": "ricordo al modello di usare i tool"})
                     self.messages.append({"role": "user", "content": NUDGE})
                     continue
+                reason = self._stop_hook()
+                if reason:
+                    self.messages.append({"role": "user", "content": f"A hook asks you to continue: {reason}"})
+                    continue
                 res.text = visible
                 res.stopped = "done"
                 break
@@ -130,6 +137,20 @@ class AgentLoop:
             res.text = res.text or "Step limit reached before finishing. Tell me to continue if needed."
         res.changed = list(self.tools.changed)
         return res
+
+    def _stop_hook(self) -> str:
+        """Gli hook Stop possono chiedere all'agente di continuare (fino al limite di passi)."""
+        hooks = self.tools.hooks
+        if not hooks:
+            return ""
+        outcome = hooks.run(self.stop_event, payload={"stop_hook_active": self.stop_hook_active})
+        for note in outcome.notes:
+            self.emit({"type": "info", "text": note})
+        if not outcome.blocked:
+            return ""
+        self.stop_hook_active = True
+        self.emit({"type": "info", "text": f"un hook chiede di continuare: {outcome.reason[:120]}"})
+        return outcome.reason
 
     def _should_nudge(self, visible: str, res: AgentResult) -> bool:
         """Il modello ha risposto con del codice invece di modificare i file con i tool: lo richiama una volta."""

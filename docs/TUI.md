@@ -87,6 +87,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/pull <nome>` | scarica un modello da Ollama con barra di avanzamento |
 | `/skill` · `/skill <nome> <richiesta>` | skill disponibili · usa una skill per questa richiesta |
 | `/plugin` · `/plugin install <utente/repo>` · `update` · `remove` | plugin nel formato di Claude Code |
+| `/hooks` · `/hooks trust` | hook attivi · attiva quelli del progetto |
 | `/vio` | saluta (e accarezza) Vio, la mascotte |
 | `/agents` | i 35 agenti (nucleo e ultra) |
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
@@ -154,9 +155,41 @@ i plugin in `.mydevagent/plugins/` del progetto, quelli installati con `/plugin 
 (`~/.mydevagent/plugins/`), **quelli che hai già installato in Claude Code** e le cartelle in
 `MYDEVAGENT_PLUGINS_DIRS`.
 
-Differenze da Claude Code: `hooks/` e `.mcp.json` non sono ancora usati (`/plugin` dice quali plugin li
-hanno), e `!`comando`` nei comandi non viene eseguito prima dell'invio: lo esegue l'agente con i suoi tool,
+Anche gli hook dei plugin funzionano (vedi sotto). Differenze da Claude Code: `.mcp.json` non è ancora
+usato, e `!`comando`` nei comandi non viene eseguito prima dell'invio: lo esegue l'agente con i suoi tool,
 chiedendo il permesso come sempre.
+
+## Hook (comandi automatici)
+Comandi che partono da soli in certi momenti, scritti come in Claude Code. Esempio: formattare ogni file
+che l'agente modifica e vietargli `git push`. In `.mydevagent/settings.json` (o `.claude/settings.json`):
+
+```json
+{"hooks": {
+  "PostToolUse": [{"matcher": "Edit|Write",
+                   "hooks": [{"type": "command", "command": "ruff format ."}]}],
+  "PreToolUse":  [{"matcher": "Bash",
+                   "hooks": [{"type": "command", "command": "python .mydevagent/no_push.py"}]}]
+}}
+```
+
+| Evento | Quando | Cosa può fare |
+|---|---|---|
+| `PreToolUse` | prima di un tool | bloccarlo (exit code 2: il testo su stderr arriva all'agente) |
+| `PostToolUse` | dopo un tool | dare un messaggio all'agente (exit 2 o `{"decision": "block", "reason": …}`) |
+| `UserPromptSubmit` | quando invii una richiesta | bloccarla, o aggiungere contesto (quello che stampa) |
+| `Stop` | quando l'agente vuole finire | chiedergli di continuare (exit 2 con il motivo) |
+| `SessionStart` | all'avvio (in background) | aggiungere contesto per tutta la sessione |
+
+Il comando riceve su stdin il JSON dell'evento (`tool_name`, `tool_input` con `file_path`, `prompt`…), con i
+nomi dei tool di Claude Code (`Bash`, `Edit`, `Write`, `Read`…); nel matcher vanno bene anche i nomi di
+MyDevAgent (`bash`, `edit_file`…). Valgono `$CLAUDE_PROJECT_DIR` e `${CLAUDE_PLUGIN_ROOT}`; su Windows gli
+hook partono con il bash di Git, se è installato, come in Claude Code.
+
+Da dove: `~/.claude/settings.json` (gli hook che usi già con Claude Code), `~/.mydevagent/settings.json`, i
+plugin, e quelli del progetto. **Quelli del progetto partono solo dopo il tuo sì**, che MyDevAgent chiede
+all'avvio (e di nuovo se cambiano): un repository scaricato non deve eseguire comandi da solo sul tuo PC.
+`/hooks` li elenca, `/hooks trust` attiva quelli del progetto, `"disableAllHooks": true` li spegne tutti.
+Gli hook `prompt`, `async`/`asyncRewake` e con `if` non sono ancora eseguiti (in `/hooks` sono in grigio).
 
 ## `/ultra-deep`
 35 agenti per i lavori importanti: ricerca web se serve, requisiti, piano con avvocato del diavolo,

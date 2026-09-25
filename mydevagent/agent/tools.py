@@ -12,6 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ..hooks import Hooks
 from ..skills import Skill
 from ..tools.filesystem import IGNORED_DIRS, Workspace, WorkspaceError
 from .checkpoints import CheckpointStore
@@ -105,7 +106,8 @@ class AgentTools:
     def __init__(self, root: Path, policy: PermissionPolicy, checkpoints: CheckpointStore,
                  approver: Approver | None = None, emit: EventHandler | None = None,
                  web_search: Callable[[str], str] | None = None, memory: str = "",
-                 bash_timeout: int = 120, skills: dict[str, Skill] | None = None) -> None:
+                 bash_timeout: int = 120, skills: dict[str, Skill] | None = None,
+                 hooks: Hooks | None = None) -> None:
         self.root = Path(root).resolve()
         self.workspace = Workspace(self.root, allow_write=True)
         self.policy = policy
@@ -116,6 +118,7 @@ class AgentTools:
         self.memory = memory
         self.bash_timeout = bash_timeout
         self.skills = skills or {}
+        self.hooks = hooks
         self.todos: list[dict[str, str]] = []
         self.changed: list[str] = []
         self.read_paths: set[str] = set()
@@ -140,18 +143,40 @@ class AgentTools:
         if handler is None or name not in SPEC_BY_NAME:
             return f"ERROR: unknown tool '{name}'. Available: {', '.join(s['name'] for s in self.specs())}"
         self.emit({"type": "tool_call", "agent": "agent", "tool": name, "args": _display_args(name, args)})
-        try:
-            result = handler(**args)
-        except TypeError as exc:
-            result = f"ERROR: bad arguments for {name}: {exc}"
-        except (WorkspaceError, FileNotFoundError, IsADirectoryError, UnicodeDecodeError) as exc:
-            result = f"ERROR: {type(exc).__name__}: {exc}"
-        except Exception as exc:  # un tool non deve mai far cadere il ciclo
-            result = f"ERROR: {name} failed: {type(exc).__name__}: {exc}"
+        blocked, reason = self._hook("PreToolUse", name, args)
+        if blocked:
+            result = f"DENIED by a hook: {reason}"
+        else:
+            try:
+                result = handler(**args)
+            except TypeError as exc:
+                result = f"ERROR: bad arguments for {name}: {exc}"
+            except (WorkspaceError, FileNotFoundError, IsADirectoryError, UnicodeDecodeError) as exc:
+                result = f"ERROR: {type(exc).__name__}: {exc}"
+            except Exception as exc:  # un tool non deve mai far cadere il ciclo
+                result = f"ERROR: {name} failed: {type(exc).__name__}: {exc}"
+            _, feedback = self._hook("PostToolUse", name, args, result)
+            if feedback:
+                result += f"\n\n[hook] {feedback}"
         ok = not result.startswith(("ERROR", "DENIED"))
         self.emit({"type": "tool_result", "agent": "agent", "tool": name, "ok": ok,
                    "preview": _preview(name, result)})
         return truncate_middle(result)
+
+    def _hook(self, event: str, name: str, args: dict[str, Any], result: str | None = None) -> tuple[bool, str]:
+        """Esegue gli hook del tool: (bloccato?, messaggio per il modello)."""
+        if not self.hooks:
+            return False, ""
+        payload = self.hooks.tool_payload(name, args)
+        if result is not None:
+            payload["tool_response"] = {"output": result, "success": not result.startswith(("ERROR", "DENIED"))}
+        outcome = self.hooks.run(event, target=name, payload=payload)
+        for note in outcome.notes:
+            self.emit({"type": "info", "text": note})
+        if outcome.blocked:
+            self.emit({"type": "info", "text": f"un hook ha {'bloccato' if event == 'PreToolUse' else 'segnalato'} "
+                                               f"{name}: {outcome.reason[:120]}"})
+        return outcome.blocked, (outcome.reason if outcome.blocked else outcome.context)
 
     # ------------------------------------------------------------- permessi
     def _authorize(self, tool: str, args: dict[str, Any], summary: str, diff: str = "") -> str | None:

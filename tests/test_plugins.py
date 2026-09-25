@@ -64,7 +64,7 @@ def test_load_plugins_from_every_source(tmp_path, home, monkeypatch):
         "revisore": "progetto", "formatta": "claude code", "vecchio": "claude code", "traduci": "extra"}
     rev = found["revisore"]
     assert (rev.count("commands"), rev.count("skills"), rev.count("agents")) == (1, 1, 1)
-    assert rev.unsupported() == ["hook"] and rev.version == "1.2.0"
+    assert rev.features() == ["hook"] and rev.version == "1.2.0"
 
     skills = load_skills(project)
     assert skills["sicurezza"].source == skills["critico"].source == "plugin revisore"

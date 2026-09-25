@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ..graph import Cancelled, Team
+from ..hooks import Hooks
 from ..skills import load_skills, skills_prompt
 from ..state import TeamState, render_files, render_history, truncate
 from ..tools.web_search import format_results
@@ -46,6 +47,8 @@ def wants_changes(request: str) -> bool:
         return False
     return bool(CHANGE_INTENT_RE.search(text))
 EventHandler = Callable[[dict[str, Any]], None]
+# i nomi dei permessi di Claude Code, per il campo permission_mode degli hook
+PERMISSION_MODES = {"ask": "default", "auto-edit": "acceptEdits", "plan": "plan", "auto": "bypassPermissions"}
 NO_CHANGES = ("The request asks to change the project, but you have not modified any file. Apply the changes now "
               "with edit_file / write_file, run the tests, then give your final answer. If you believe no change is "
               "needed, explain why in one line.")
@@ -53,17 +56,25 @@ NO_CHANGES = ("The request asks to change the project, but you have not modified
 
 class AgentRunner:
     def __init__(self, orchestrator, root: Path, policy: PermissionPolicy, *, approver: Approver | None = None,
-                 checkpoints: CheckpointStore | None = None) -> None:
+                 checkpoints: CheckpointStore | None = None, hooks: Hooks | None = None) -> None:
         self.orch = orchestrator
         self.root = Path(root).resolve()
         self.policy = policy
         self.approver = approver
         self.checkpoints = checkpoints or CheckpointStore(self.root)
+        self.hooks = hooks if hooks is not None else Hooks(self.root)
 
     def run(self, request: str, *, history: list[dict[str, Any]] | None = None,
             files: dict[str, str] | None = None, mode: str | None = None, on_event: EventHandler | None = None,
             cancel: threading.Event | None = None) -> Iterator[str]:
         emit = on_event or (lambda _e: None)
+        self.hooks.mode = PERMISSION_MODES.get(self.policy.mode, "default")
+        submitted = self.hooks.run("UserPromptSubmit", payload={"prompt": request})
+        for note in submitted.notes:
+            emit({"type": "info", "text": note})
+        if submitted.blocked:
+            yield f"⛔ Richiesta bloccata da un hook: {submitted.reason}"
+            return
         orch = self.orch
         route = orch.route(request, mode=mode)
         settings = orch.settings
@@ -80,9 +91,11 @@ class AgentRunner:
         memory = read_memory(self.root)
         skills = load_skills(self.root)
         tools = AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
-                           web_search=web_fn, memory=memory, skills=skills)
+                           web_search=web_fn, memory=memory, skills=skills, hooks=self.hooks)
         self.checkpoints.begin(route.request)
-        context = "\n\n".join(p for p in (skills_prompt(skills), project_context(self.root, route.request)) if p)
+        hook_context = "\n".join(filter(None, (self.hooks.session_context, submitted.context)))
+        context = "\n\n".join(p for p in (skills_prompt(skills), project_context(self.root, route.request),
+                                           f"# Context from hooks\n{hook_context}" if hook_context else "") if p)
 
         state: TeamState = {
             "request": route.request,

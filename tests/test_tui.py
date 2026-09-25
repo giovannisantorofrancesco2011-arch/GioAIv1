@@ -281,5 +281,5 @@ def test_plugin_command(settings, project, tmp_path, monkeypatch):
     app.handle_command("/plugin boh")
     out = console.export_text()
     assert "Nessun plugin" in out and "Installato revisore" in out and "1 comando · 1 skill · 1 agente" in out
-    assert "Non ancora supportati: revisore (hook)" in out and "Rimosso revisore" in out and "uso: /plugin" in out
+    assert "1 comando · 1 skill · 1 agente · hook" in out and "Rimosso revisore" in out and "uso: /plugin" in out
     assert "/rivedi" not in app.custom

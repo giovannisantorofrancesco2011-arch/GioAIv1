@@ -7,9 +7,15 @@ from mydevagent.registry import load_registry
 
 
 @pytest.fixture(autouse=True)
-def offline(monkeypatch):
+def offline(monkeypatch, tmp_path):
     monkeypatch.setenv("MYDEVAGENT_OFFLINE", "1")
     monkeypatch.delenv("MYDEVAGENT_API_KEY", raising=False)
+    # niente plugin, hook, skill o server MCP veri dell'utente (~/.claude, ~/.mydevagent) nei test
+    for var in ("HOME", "USERPROFILE"):
+        monkeypatch.setenv(var, str(tmp_path / "home"))
+    monkeypatch.setenv("MYDEVAGENT_STATE_DIR", str(tmp_path / "state"))
+    for var in ("MYDEVAGENT_SKILLS_DIRS", "MYDEVAGENT_PLUGINS_DIRS"):
+        monkeypatch.delenv(var, raising=False)
 
 
 @pytest.fixture

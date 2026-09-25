@@ -29,12 +29,14 @@ from rich.syntax import Syntax
 from rich.table import Table
 
 from .. import health, plugins
+from .. import hooks as hooks_mod
 from ..agent import CheckpointStore, PermissionPolicy
 from ..agent.context import append_memory, read_memory
 from ..agent.permissions import MODE_LABELS, ApprovalRequest
 from ..agent.permissions import MODES as PERMISSION_MODES
 from ..agent.runner import AgentRunner
 from ..config import load_settings
+from ..hooks import Hooks
 from ..orchestrator import Orchestrator
 from ..skills import load_skills
 from ..tools.filesystem import Workspace
@@ -76,6 +78,7 @@ COMMANDS = {
     "/vio": "saluta Vio, la mascotte (e accarezzala)",
     "/skill": "skill disponibili · /skill <nome> [richiesta] per usarne una",
     "/plugin": "plugin (formato Claude Code) · /plugin install <utente/repo> · update · remove",
+    "/hooks": "hook attivi (comandi automatici) · /hooks trust attiva quelli del progetto",
     "/resume": "riprendi una sessione precedente in questa cartella",
     "/export": "salva la conversazione in Markdown",
     "/clear": "nuova conversazione",
@@ -129,6 +132,7 @@ class TuiApp:
         self._startup_check = background if startup_check is None else startup_check
         self._ctrl_c_at = 0.0
         self.custom = extras.custom_commands(self.root)
+        self.hooks = Hooks(self.root)
         self._load_prefs()
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
@@ -512,6 +516,8 @@ class TuiApp:
             self._skill(arg)
         elif cmd in ("/plugin", "/plugins"):
             self._plugin(arg)
+        elif cmd in ("/hooks", "/hook"):
+            self._hooks(arg)
         elif cmd == "/vio":
             self._pats = getattr(self, "_pats", 0) + 1
             self.say(mascot.PATS[(self._pats - 1) % len(mascot.PATS)], "love")
@@ -564,6 +570,49 @@ class TuiApp:
         self.submit(f"Follow the skill `{skill.name}` for this request.\n\n{skill.read()}\n\n# Request\n{task}",
                     display=f"/skill {arg}")
 
+    def start_hooks(self) -> None:
+        """Chiede il permesso per gli hook del progetto (una volta, o quando cambiano) e lancia SessionStart."""
+        pending = hooks_mod.untrusted(self.root)
+        if pending:
+            self.console.print(f"[bold]Questo progetto ha {len(pending)} hook: comandi che partono da soli.[/]")
+            for hook in pending[:8]:
+                self.console.print(f"  [dim]{hook.event}[/] {escape(hook.command[:90])} [dim]({hook.source})[/]")
+            answer = self._reply("  Li attivo? Solo se ti fidi di questo progetto [s/N] › ")
+            if answer.strip().lower() in ("s", "si", "sì", "y", "yes"):
+                hooks_mod.trust(self.root)
+        self.hooks = Hooks(self.root)
+        if any(h.event == "SessionStart" and not h.unsupported for h in self.hooks.hooks):
+            # in background: alcuni plugin installano pacchetti all'avvio e non devono bloccarti
+            threading.Thread(target=self.hooks.start, args=("startup",), daemon=True).start()
+
+    def _hooks(self, arg: str) -> None:
+        c = self.console
+        if arg.lower() == "trust":
+            hooks_mod.trust(self.root)
+            self.hooks = Hooks(self.root)
+            c.print(f"[green]⏺[/] Hook del progetto attivati ({len(self.hooks.hooks)} hook attivi)")
+            return
+        pending = hooks_mod.untrusted(self.root)
+        if not self.hooks.hooks and not pending:
+            c.print("[dim]⎿  Nessun hook. Si scrivono come in Claude Code, in .mydevagent/settings.json o "
+                    ".claude/settings.json (guida: docs/TUI.md)[/]", highlight=False)
+            return
+        table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2), expand=True)
+        for col in ("evento", "matcher", "da"):
+            table.add_column(col, no_wrap=True)
+        table.add_column("comando", no_wrap=True, overflow="ellipsis", ratio=1)
+        for hook in self.hooks.hooks:
+            event = f"[dim]{hook.event}[/]" if hook.unsupported else f"[{ACCENT}]{hook.event}[/]"
+            command = escape(hook.command) + (f" [dim]({hook.unsupported})[/]" if hook.unsupported else "")
+            table.add_row(event, escape(hook.matcher or "*"), escape(hook.source), command)
+        c.print(table)
+        skipped = sum(1 for h in self.hooks.hooks if h.unsupported)
+        if skipped:
+            c.print(f"[dim]{skipped} hook in grigio non vengono eseguiti: usano funzioni di Claude Code che "
+                    "MyDevAgent non ha ancora[/]")
+        if pending:
+            c.print(f"[yellow]⎿  {len(pending)} hook del progetto sono spenti: /hooks trust per attivarli[/]")
+
     def _plugin(self, arg: str) -> None:
         c = self.console
         action, _, target = arg.partition(" ")
@@ -609,9 +658,9 @@ class TuiApp:
             table.add_row(f"[{ACCENT}]{escape(p.name)}[/]", escape(source), self._plugin_summary(p),
                           escape(p.description))
         c.print(table)
-        partial = [f"{p.name} ({', '.join(p.unsupported())})" for p in found.values() if p.unsupported()]
-        if partial:
-            c.print(f"[dim]Non ancora supportati: {escape('; '.join(partial))}. Il resto funziona.[/]",
+        with_mcp = [p.name for p in found.values() if "MCP" in p.features()]
+        if with_mcp:
+            c.print(f"[dim]Server MCP non ancora supportati: {escape(', '.join(with_mcp))}. Il resto funziona.[/]",
                     highlight=False)
         c.print("[dim]/plugin install <utente/repo | url | cartella> · /plugin update <nome> · "
                 "/plugin remove <nome>[/]", highlight=False)
@@ -620,7 +669,7 @@ class TuiApp:
     def _plugin_summary(plugin: plugins.Plugin) -> str:
         names = (("commands", "comando", "comandi"), ("skills", "skill", "skill"), ("agents", "agente", "agenti"))
         parts = [f"{n} {one if n == 1 else many}" for kind, one, many in names if (n := plugin.count(kind))]
-        return " · ".join(parts) or "solo hook o MCP"
+        return " · ".join(parts + plugin.features()) or "vuoto"
 
     def _rewind(self) -> None:
         checkpoints = self.checkpoints.list()
@@ -893,7 +942,7 @@ class TuiApp:
                 if self.agent_mode:
                     extras_private_dir(self.root)
                     runner = AgentRunner(self.orch, self.root, self.policy, approver=approver,
-                                         checkpoints=self.checkpoints)
+                                         checkpoints=self.checkpoints, hooks=self.hooks)
                     stream = runner.run(text, history=self.session.history, files=files, mode=mode,
                                         on_event=lambda e: events.put(("event", e)), cancel=cancel)
                 else:
@@ -993,6 +1042,7 @@ class TuiApp:
         self.banner()
         if self._startup_check:
             self.startup_check()
+        self.start_hooks()
         while True:
             self.console.print()
             try:
