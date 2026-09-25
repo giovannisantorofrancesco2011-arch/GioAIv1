@@ -269,10 +269,10 @@ class TuiApp:
                     "per esempio /add-dir ../backend[/]", highlight=False)
             return
         if target and not remove:
-            c.print(f"[green]⏺[/] Aggiunta {escape(str(folder))}: l'agente può leggere, cercare e modificare anche "
-                    "lì (con i soliti permessi)", highlight=False)
+            c.print(f"[green]⏺[/] Aggiunta {escape(display_path(self.root, folder))}: l'agente può leggere, cercare "
+                    "e modificare anche lì (con i soliti permessi)", highlight=False)
             self.say("Ora lavoro su più cartelle insieme!", "love")
-        c.print("[dim]⎿  cartelle: " + escape(str(self.root)) + " (progetto) · "
+        c.print("[dim]⎿  cartelle: questo progetto · "
                 + " · ".join(escape(display_path(self.root, d)) for d in self.extra_dirs)
                 + " · /add-dir rimuovi <cartella> per toglierne una[/]", highlight=False)
 
@@ -539,8 +539,8 @@ class TuiApp:
             self.learn = arg.lower() in ("on", "sì", "si") or (arg.lower() not in ("off", "no") and not self.learn)
             self._save_pref("learn", self.learn)
             if self.learn:
-                c.print("[dim]⎿  modalità impara: spiego cosa faccio e ti lascio un pezzo da scrivere (lo trovi "
-                        "con TODO(tu)) · /impara off per tornare normale[/]", highlight=False)
+                c.print("[dim]⎿  modalità impara: spiego cosa faccio e ti lascio un pezzo da scrivere (cerca "
+                        "TODO(tu)) · /impara off per spegnerla[/]", highlight=False)
                 self.say("Impariamo insieme! Qualche pezzo lo scrivi tu.", "love")
             else:
                 c.print("[dim]⎿  modalità impara spenta: scrivo io tutto il codice[/]")
