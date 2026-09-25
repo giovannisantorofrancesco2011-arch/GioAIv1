@@ -4,7 +4,7 @@
 #    MYDEVAGENT_PROFILE, LLM_BASE_URL, LLM_API_KEY, MYDEVAGENT_MODEL_<TIER>
 # =====================================================================
 
-# Profilo hardware attivo: cpu | gpu8 | gpu16 | gpu24
+# Profilo hardware attivo: cpu | gpu8 | gpu16 | gpu24 (oppure mycode, il tuo modello addestrato)
 profile: gpu8
 
 # Server LLM compatibili OpenAI. Tutti espongono /v1/chat/completions.
@@ -55,6 +55,15 @@ profiles:
     embed: "nomic-embed-text"
     num_ctx: 32768
     native_tools: true
+  mycode:
+    # MyCode: Qwen2.5-Coder 7B addestrato sui tuoi file .md (vedi finetune/mycode/LEGGIMI.md). GPU da 8 GB.
+    main: "mycode"
+    fast: "qwen2.5-coder:1.5b"
+    reasoning: "mycode"
+    vision: "qwen2.5vl:7b"
+    embed: "nomic-embed-text"
+    num_ctx: 16384
+    native_tools: false
 
 # Modalità di esecuzione (scelte dal router, oppure forzate con /fast /balanced /deep)
 modes:

@@ -1,0 +1,39 @@
+# MyCode: Qwen2.5-Coder 7B addestrato (QLoRA) sul manuale e sugli esempi in finetune/mycode/data.
+# Impostazioni per una GPU da 8 GB (RTX 4060): contesto 2048, un esempio alla volta.
+# Se va in "CUDA out of memory": chiudi i programmi che usano la GPU, oppure usa il notebook Colab,
+# oppure passa al 3B:  base_model: unsloth/Qwen2.5-Coder-3B-Instruct-bnb-4bit
+base_model: unsloth/Qwen2.5-Coder-7B-Instruct-bnb-4bit
+max_seq_length: 2048
+load_in_4bit: true
+
+lora:
+  r: 16
+  alpha: 16
+  dropout: 0.0
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+data:
+  train:
+    - finetune/mycode/data/train.jsonl       # scritti da Claude a partire dai tuoi 14 file
+    - finetune/mycode/data/generated.jsonl   # aggiunti da md_to_model.py con i tuoi nuovi .md
+  val: finetune/mycode/data/val.jsonl
+
+train:
+  output_dir: finetune/mycode/outputs
+  epochs: 2
+  batch_size: 1
+  grad_accum: 16
+  learning_rate: 2.0e-4
+  warmup_ratio: 0.03
+  lr_scheduler: cosine
+  weight_decay: 0.01
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 200
+  seed: 42
+  responses_only: true    # impara solo dalle risposte di MyCode
+
+export:
+  gguf_dir: finetune/mycode/outputs/gguf
+  quantization: q4_k_m    # ~4,7 GB: entra nella RTX 4060 con 16k di contesto
+  ollama_name: mycode

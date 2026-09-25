@@ -66,7 +66,7 @@ def _images(paths: list[Path] | None) -> list[str]:
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
+    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24 | mycode"),
     continue_last: bool = typer.Option(False, "--continue", "-c", help="Riprendi l'ultima sessione in questa cartella"),
     permissions: str = typer.Option("ask", "--permissions", help="ask | auto-edit | plan | auto"),
     add_dir: list[Path] = typer.Option(None, "--add-dir", help="Un'altra cartella su cui lavorare (ripetibile)"),
@@ -84,7 +84,7 @@ def ask(
     file: list[Path] = typer.Option(None, "--file", "-f", exists=True, help="File da allegare (ripetibile)"),
     image: list[Path] = typer.Option(None, "--image", "-i", exists=True, help="Screenshot/mockup (ripetibile)"),
     mode: str = typer.Option("auto", "--mode", "-m", help="auto | fast | balanced | deep"),
-    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
+    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24 | mycode"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Solo la risposta, senza avanzamento agenti"),
     think: bool = typer.Option(False, "--show-thinking", help="Mostra i blocchi <think> del modello"),
 ) -> None:
@@ -118,7 +118,7 @@ CHAT_HELP = """[bold]Comandi[/bold]: /fast /balanced /deep /auto (modalità) · 
 
 @app.command()
 def chat(
-    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
+    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24 | mycode"),
     mode: str = typer.Option("auto", "--mode", "-m"),
     plain: bool = typer.Option(False, "--plain", help="Chat semplice (terminali limitati, pipe)"),
     continue_last: bool = typer.Option(False, "--continue", "-c"),

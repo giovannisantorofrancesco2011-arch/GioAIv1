@@ -76,6 +76,7 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 | Multigiocatore: gli amici sulla tua rete seguono la sessione dal browser e scrivono all'agente (le modifiche le confermi tu) | MyDevAgent | `/multi` |
 | Compattazione della conversazione | Claude Code | `/compact`, automatica |
 | Team multi-agente con review sul diff reale e dibattito sul piano | MyDevAgent | `/balanced` `/deep` `/ultra-deep` |
+| MyCode: un modello locale addestrato a comportarsi come i migliori assistenti, e che impara da nuovi file Markdown | MyDevAgent | [`finetune/mycode/`](finetune/mycode/LEGGIMI.md), `-p mycode` |
 
 ---
 
@@ -114,6 +115,7 @@ mydevagent
 | `gpu8` | GPU 8 GB (RTX 3060/4060, M1/M2 16 GB) | qwen2.5-coder:7b |
 | `gpu16` | GPU 12–16 GB | qwen2.5-coder:14b |
 | `gpu24` | GPU 24 GB / Mac 32 GB+ | qwen3-coder:30b (MoE, velocissimo) |
+| `mycode` | GPU 8 GB | MyCode, il nostro qwen2.5-coder:7b addestrato ([come crearlo](finetune/mycode/LEGGIMI.md)) |
 
 Cambia profilo con `MYDEVAGENT_PROFILE=gpu16` in `.env` o `mydevagent -p gpu16`. `mydevagent doctor` ti dice
 quale profilo è adatto al tuo hardware.
@@ -221,6 +223,7 @@ Qualsiasi server compatibile OpenAI funziona: basta `LLM_BASE_URL` e i nomi dei 
 - [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) — modelli, agenti, squadre, tool custom, RAG, QLoRA
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — come renderlo più veloce e più efficiente con i token
 - [finetune/README.md](finetune/README.md) — addestramento sui tuoi repository
+- [finetune/mycode/LEGGIMI.md](finetune/mycode/LEGGIMI.md) — MyCode: provarlo, addestrarlo sulla RTX 4060 o su Colab, insegnargli nuovi file
 
 ## Struttura del progetto
 ```

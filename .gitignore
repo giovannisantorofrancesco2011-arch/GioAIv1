@@ -11,4 +11,7 @@ build/
 dist/
 finetune/data/
 finetune/outputs/
+finetune/mycode/outputs/
+finetune/mycode/.cache/
+finetune/mycode/*.bak.md
 *.gguf

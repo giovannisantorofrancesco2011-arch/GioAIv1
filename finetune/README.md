@@ -6,6 +6,8 @@
 | `config_qlora.yaml` | modello base, LoRA (r=16), iperparametri, export |
 | `train_qlora.py` | training QLoRA 4-bit con Unsloth + TRL |
 | `export_gguf.sh` | merge + quantizzazione GGUF + `ollama create mydevagent-custom` |
+| `md_to_model.py` | dai file Markdown al manuale e agli esempi di MyCode (lo fa il tuo modello su Ollama) |
+| `mycode/` | MyCode, il modello addestrato sul comportamento dei migliori assistenti: vedi [mycode/LEGGIMI.md](mycode/LEGGIMI.md) |
 
 ## Requisiti
 - GPU NVIDIA con 8 GB+ (1.5B/3B), ~10 GB (7B), ~16 GB (14B). Linux o WSL2.

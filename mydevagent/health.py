@@ -24,6 +24,13 @@ ESSENTIAL_TIERS = ("main", "fast", "reasoning")  # senza questi il team non risp
 OPTIONAL_TIERS = ("embed", "vision")  # senza: ricerca lessicale al posto degli embedding, niente immagini
 PROFILE_ORDER = ("cpu", "gpu8", "gpu16", "gpu24")
 SIZE_RE = re.compile(r":(\d+(?:\.\d+)?)b\b", re.IGNORECASE)
+# modelli che si creano sul PC e non si scaricano: mai chiederli a Ollama (lì potrebbe esserci un omonimo)
+LOCAL_MODELS = {"mycode": "crealo con `python finetune/mycode/crea_mycode.py` "
+                          "(con --subito lo provi prima dell'addestramento)"}
+
+
+def local_model_hint(model: str) -> str | None:
+    return LOCAL_MODELS.get(model.removesuffix(":latest"))
 
 
 # ------------------------------------------------------------------ backend e modelli
@@ -210,6 +217,8 @@ def explain_error(exc: BaseException, settings: Settings | None = None) -> tuple
     model = _model_from_error(text)
     if (name == "NotFoundError" or "404" in text) and "model" in low and ("not found" in low or "pull" in low):
         what = f"Il modello {model} non è installato" if model else "Il modello richiesto non è installato"
+        if model and local_model_hint(model):
+            return what, local_model_hint(model)
         hint = (f"scaricalo con `/pull {model}` (o `ollama pull {model}`)" if model else "controlla con /models")
         return what, hint + ", oppure usa un modello che hai già con `/model <nome>`"
     if name in ("APIConnectionError", "ConnectError", "ConnectionError", "ConnectionRefusedError") or \

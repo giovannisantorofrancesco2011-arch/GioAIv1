@@ -583,7 +583,15 @@ class TuiApp:
             if not arg:
                 c.print("[dim]⎿  uso: /pull <nome>, es. /pull qwen2.5-coder:7b[/]")
             else:
-                self.pull_models(arg.split())
+                remote = []
+                for name in arg.split():
+                    hint = health.local_model_hint(name)
+                    if hint:
+                        c.print(f"[dim]⎿  {escape(name)} non si scarica: {escape(hint)}[/]")
+                    else:
+                        remote.append(name)
+                if remote:
+                    self.pull_models(remote)
         elif cmd == "/agents":
             table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
             for col in ("#", "agente", "gruppo", "stage", "alias"):
@@ -1050,9 +1058,11 @@ class TuiApp:
             weight = f" · circa {size * 0.6 + 0.4:.1f} GB" if size else ""
             note = "" if set(tiers) & set(health.ESSENTIAL_TIERS) else " [dim](opzionale)[/]"
             lines.append(f"  [red]✗[/] {escape(model)} [dim]({', '.join(tiers)}{weight})[/]{note}")
-        to_pull = list(dict.fromkeys(m.model for m in (essential or missing)))
+            if health.local_model_hint(model):
+                lines.append(f"    [dim]⎿  {escape(health.local_model_hint(model))}[/]")
+        to_pull = [m for m in dict.fromkeys(m.model for m in (essential or missing)) if not health.local_model_hint(m)]
         subs = health.substitutes(status)
-        can_pull = health.is_ollama(missing[0].base_url)
+        can_pull = bool(to_pull) and health.is_ollama(missing[0].base_url)
         options = []
         if can_pull:
             options.append(("1", "Scaricali ora" + (" (solo quelli necessari)" if len(to_pull) < len(tiers_by_model)

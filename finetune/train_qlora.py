@@ -21,7 +21,7 @@ def main() -> None:
     ap.add_argument("--config", default="finetune/config_qlora.yaml")
     ap.add_argument("--export-gguf", action="store_true", help="esporta subito anche il GGUF quantizzato")
     args = ap.parse_args()
-    cfg = yaml.safe_load(Path(args.config).read_text())
+    cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
 
     from unsloth import FastLanguageModel  # import prima di transformers/trl (patch di Unsloth)
     from datasets import Dataset, load_dataset
@@ -41,12 +41,19 @@ def main() -> None:
         return {"text": example["text"]}
 
     data = cfg["data"]
-    train_rows = load_dataset("json", data_files=data["train"], split="train").to_list()
+    train_files = [f for f in ([data["train"]] if isinstance(data["train"], str) else data["train"])
+                   if Path(f).is_file() and Path(f).stat().st_size]
+    train_rows = load_dataset("json", data_files=train_files, split="train").to_list()
     if data.get("fim") and Path(data["fim"]).is_file():
         fim_rows = load_dataset("json", data_files=data["fim"], split="train").to_list()
         random.Random(cfg["train"]["seed"]).shuffle(fim_rows)
         train_rows += fim_rows[: int(len(train_rows) * data.get("fim_ratio", 0.3))]
     train_ds = Dataset.from_list([to_text(r) for r in train_rows]).shuffle(seed=cfg["train"]["seed"])
+    # gli esempi più lunghi del contesto verrebbero tagliati a metà risposta: meglio saltarli
+    too_long = train_ds.filter(lambda r: len(tokenizer(r["text"]).input_ids) > cfg["max_seq_length"])
+    if len(too_long):
+        print(f"Salto {len(too_long)} esempi più lunghi di {cfg['max_seq_length']} token")
+        train_ds = train_ds.filter(lambda r: len(tokenizer(r["text"]).input_ids) <= cfg["max_seq_length"])
     val_ds = None
     if Path(data["val"]).is_file() and Path(data["val"]).stat().st_size:
         val_ds = Dataset.from_list([to_text(r) for r in load_dataset("json", data_files=data["val"],
@@ -66,6 +73,11 @@ def main() -> None:
         trainer = SFTTrainer(processing_class=tokenizer, **kwargs)   # TRL recente
     except TypeError:
         trainer = SFTTrainer(tokenizer=tokenizer, **kwargs)          # TRL < 0.12
+    if t.get("responses_only"):
+        # impara solo dalle risposte dell'assistente, non dai messaggi dell'utente e dei tool
+        from unsloth.chat_templates import train_on_responses_only
+        trainer = train_on_responses_only(trainer, instruction_part="<|im_start|>user\n",
+                                          response_part="<|im_start|>assistant\n")
     trainer.train()
 
     out = Path(t["output_dir"])
@@ -76,7 +88,8 @@ def main() -> None:
     if args.export_gguf:
         exp = cfg["export"]
         model.save_pretrained_gguf(exp["gguf_dir"], tokenizer, quantization_method=exp["quantization"])
-        print(f"GGUF salvato in {exp['gguf_dir']} — ora: bash finetune/export_gguf.sh")
+        print(f"GGUF salvato in {exp['gguf_dir']} — ora crealo in Ollama: bash finetune/export_gguf.sh "
+              "(per MyCode: python finetune/mycode/crea_mycode.py)")
 
 
 if __name__ == "__main__":
