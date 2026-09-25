@@ -151,7 +151,8 @@ class AgentRunner:
             result = loop.run(prompt)
             emit({"type": "agent_end", "agent": agent.name, "name": f"Agente {agent.name}",
                   "ms": int((time.perf_counter() - started) * 1000), "prompt_tokens": result.prompt_tokens,
-                  "completion_tokens": result.completion_tokens, "tool_calls": result.tool_calls, "error": None})
+                  "completion_tokens": result.completion_tokens, "tool_calls": result.tool_calls, "error": None,
+                  "counted": True})
             return result.text or "(no report)", child
 
         tools = tools_for(subagents=subagents, spawn=spawn)
@@ -200,7 +201,7 @@ class AgentRunner:
             emit({"type": "agent_end", "agent": lead.key, "name": lead.name,
                   "ms": int((time.perf_counter() - started) * 1000),
                   "prompt_tokens": result.prompt_tokens, "completion_tokens": result.completion_tokens,
-                  "tool_calls": result.tool_calls, "error": None, "quiet": True})
+                  "tool_calls": result.tool_calls, "error": None, "quiet": True, "counted": True})
 
             if (not tools.changed and not tools.user_denied and wants_changes(route.request)
                     and self.policy.mode != "plan"):
@@ -266,7 +267,8 @@ class AgentRunner:
                 result = self.loop.run(task + (f"\n\n# Possibly relevant code\n{rag}" if rag else ""))
                 emit({"type": "agent_end", "agent": lead.key, "name": lead.name,
                       "ms": int((time.perf_counter() - started) * 1000), "prompt_tokens": result.prompt_tokens,
-                      "completion_tokens": result.completion_tokens, "tool_calls": result.tool_calls, "error": None})
+                      "completion_tokens": result.completion_tokens, "tool_calls": result.tool_calls, "error": None,
+                      "counted": True})
                 self.summary = result.text
                 return result.text
 

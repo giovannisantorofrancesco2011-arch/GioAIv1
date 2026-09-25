@@ -99,6 +99,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/vio` | saluta (e accarezza) Vio, la mascotte |
 | `/agents` | i 35 agenti (nucleo e ultra) |
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
+| `/stats` · `/stats 7` · `/stats 30` | statistiche: questa sessione e da sempre (o ultimi giorni), grafico dell'attività, giorni di fila |
 | `/index` | indicizza il progetto per la ricerca semantica (di solito lo fa da solo in background) |
 | `/doctor` | verifica backend, modelli, rete, sandbox |
 | `/update` | aggiorna MyDevAgent (`git pull`, dipendenze se cambiate); all'avvio Vio ti avvisa delle novità |
@@ -176,6 +177,15 @@ Vio ti dice quando qualcuno si collega, e `/multi` mostra di nuovo link e chi è
 l'uscita da MyDevAgent) chiude la sessione. Dai il codice solo a chi ti fidi: tramite l'agente può leggere
 i file del progetto (non `.env` e le chiavi). La prima volta Windows può chiedere il permesso per Python nel
 firewall: consentilo sulle reti private.
+
+## Statistiche: `/stats`
+Due colonne, **questa sessione** e **da sempre** (`/stats 7` o `/stats 30`: solo gli ultimi giorni):
+richieste, token, tempo di lavoro dell'agente, strumenti usati, file modificati, righe aggiunte e tolte,
+test passati e falliti. Sotto c'è il grafico dell'attività come su GitHub (una colonna per settimana,
+più è viola acceso più richieste hai fatto quel giorno), la serie di giorni di fila 🔥 con il tuo record,
+il giorno record, l'ora preferita, il modello e il team che usi di più e i progetti su cui lavori.
+Ogni richiesta aggiunge una riga a `~/.mydevagent/stats.jsonl` (anche quelle fatte da MyDevAgent Studio):
+resta sul tuo PC, e per ricominciare da zero basta cancellare quel file.
 
 ## Memoria del progetto: `MYDEVAGENT.md`
 Un file nella radice del progetto con comandi, architettura e convenzioni: l'agente lo legge a ogni
@@ -341,6 +351,7 @@ Integratore capo, fino a 3 giri di correzione, documentazione e release. Le fasi
 | `extras.py` | comandi personalizzati, compattazione, notifiche, warmup del modello |
 | `completion.py` · `apply.py` · `session.py` | completamento · `/apply` · sessioni e `/resume` |
 | `multi.py` · `multi.html` | `/multi`: la stanza (server HTTP con il feed in Server-Sent Events) e la pagina per gli amici |
+| `statsview.py` | `/stats`: tabella, grafico dell'attività e serie di giorni (i dati li raccoglie `mydevagent/stats.py`) |
 
 ### Aggiungere un comando
 Aggiungi nome e descrizione a `COMMANDS` in `app.py` e gestiscilo in `TuiApp.handle_command`

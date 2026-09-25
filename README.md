@@ -74,6 +74,7 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 | Anteprima dei siti su localhost: l'agente apre la pagina, la guarda (screenshot + modello vision) e legge gli errori della console | Claude Code + Playwright MCP | `/anteprima`, automatica |
 | Più cartelle insieme (es. frontend e backend): l'agente legge, cerca e modifica in tutte | Claude Code | `/add-dir`, `--add-dir` |
 | Multigiocatore: gli amici sulla tua rete seguono la sessione dal browser e scrivono all'agente (le modifiche le confermi tu) | MyDevAgent | `/multi` |
+| Statistiche: richieste, token, file e righe cambiate, test, grafico dell'attività e giorni di fila | Claude Code | `/stats` |
 | Compattazione della conversazione | Claude Code | `/compact`, automatica |
 | Team multi-agente con review sul diff reale e dibattito sul piano | MyDevAgent | `/balanced` `/deep` `/ultra-deep` |
 

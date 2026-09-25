@@ -37,6 +37,7 @@ from rich.table import Table
 from .. import health, plugins, templates
 from .. import hooks as hooks_mod
 from .. import mcp as mcp_mod
+from .. import stats as stats_mod
 from .. import update as update_mod
 from ..agent import CheckpointStore, PermissionPolicy
 from ..agent.context import append_memory, read_memory
@@ -51,7 +52,7 @@ from ..skills import load_skills
 from ..subagents import load_subagents
 from ..tools import preview as preview_mod
 from ..tools.filesystem import Workspace, WorkspaceError, display_path
-from . import extras, mascot, multi
+from . import extras, mascot, multi, statsview
 from .apply import apply_answer
 from .completion import DevCompleter
 from .keys import EscWatcher
@@ -88,6 +89,7 @@ COMMANDS = {
     "/agents": "elenca gli agenti del team e i sotto-agenti (formato Claude Code)",
     "/files": "file allegati all'ultimo messaggio",
     "/cost": "token e tempo della sessione",
+    "/stats": "statistiche: richieste, token, file, giorni di fila e grafico dell'attività · /stats 7 · /stats 30",
     "/think": "mostra/nascondi il ragionamento del modello",
     "/index": "indicizza il progetto per la ricerca semantica",
     "/doctor": "verifica backend, modelli, rete, sandbox",
@@ -145,6 +147,7 @@ class TuiApp:
         self.last_files: dict[str, str] = {}
         self.pending_context: dict[str, str] = {}  # output di comandi `!` da allegare al prossimo turno
         self.stats = {"tokens": 0, "turns": 0, "seconds": 0.0}
+        self.turn_log: list[dict[str, Any]] = []  # le richieste di questa sessione, per /stats
         self.names = {a.key: a.name for a in self.orch.registry}
         self.model = self.orch.settings.resolve_model("main")[0]
         self.online: bool | None = None
@@ -163,7 +166,7 @@ class TuiApp:
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
         names = {"/skill": lambda: list(load_skills(self.root)), "/new": lambda: list(templates.TEMPLATES)}
-        self.completer.arguments = {**names, "/skills": names["/skill"]}
+        self.completer.arguments = {**names, "/skills": names["/skill"], "/stats": lambda: ["7", "30", "sempre"]}
         self._vio_event: tuple[str | None, str, tuple] | None = None
         self.room: multi.Room | None = None  # multigiocatore (/multi)
         self._at_prompt = False
@@ -608,6 +611,8 @@ class TuiApp:
                         "gli riportano il risultato[/]")
         elif cmd == "/files":
             c.print("[dim]⎿  " + (", ".join(self.last_files) or "nessun file allegato") + "[/]")
+        elif cmd == "/stats":
+            self._stats(arg)
         elif cmd == "/cost":
             c.print(f"[dim]⎿  {self.stats['turns']} turni · ~{self.stats['tokens']:,} token · "
                     f"{self.stats['seconds']:.0f}s di lavoro[/]".replace(",", "."))
@@ -654,6 +659,21 @@ class TuiApp:
         else:
             c.print(f"[red]⎿  comando sconosciuto: {escape(cmd)}[/] [dim](/help)[/]")
         return True
+
+    def _stats(self, arg: str) -> None:
+        choice = arg.lower() or "sempre"
+        if choice not in statsview.RANGES:
+            self.console.print("[red]⎿  uso: /stats · /stats 7 (ultimi 7 giorni) · /stats 30[/]")
+            return
+        days = statsview.RANGES[choice]
+        history = stats_mod.summarize(stats_mod.load())
+        total = stats_mod.summarize(stats_mod.load(days)) if days else history
+        self.console.print(statsview.render(stats_mod.summarize(self.turn_log), total, history,
+                                            label=f"ultimi {days} giorni" if days else "da sempre",
+                                            width=self.console.width))
+        streak, _ = history.streaks()
+        self.say(f"{streak} giorni di fila insieme! Continuiamo così." if streak > 1
+                 else "Ecco cosa abbiamo fatto insieme!", "love")
 
     def _skill(self, arg: str) -> None:
         skills = load_skills(self.root)
@@ -1252,6 +1272,7 @@ class TuiApp:
         if room:
             room.publish({"kind": "busy", "on": True})
         started = time.monotonic()
+        turn = stats_mod.Turn(project=str(self.root), session=self.session.id, model=self.model)
         pending_replies: list[queue.Queue] = []
         mode = None if self.mode == "auto" else self.mode
 
@@ -1346,6 +1367,7 @@ class TuiApp:
                         renderer.on_chunk(value)
                     else:
                         renderer.on_event(value)
+                        turn.on_event(value)
                     live.update(renderer.view())
                     if room:
                         room.flush()
@@ -1364,6 +1386,8 @@ class TuiApp:
         self.stats["turns"] += 1
         self.stats["seconds"] += elapsed
         self.stats["tokens"] += renderer.tokens + len(renderer.answer) // 4
+        turn.cancelled = turn.cancelled or renderer.cancelled
+        self.turn_log.append(turn.finish(renderer.answer, estimate=not self.agent_mode, failed=bool(failed)))
         if elapsed > NOTIFY_AFTER_S and not self._ask:
             extras.notify("MyDevAgent", "Ho finito" if not renderer.cancelled else "Interrotto")
         answer = renderer.answer + ("\n\n[interrotto]" if renderer.cancelled else "")

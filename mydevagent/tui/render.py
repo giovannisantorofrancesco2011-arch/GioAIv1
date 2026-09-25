@@ -115,7 +115,7 @@ class TurnRenderer:
                 self.status = "Scrivo la risposta"
         elif kind == "agent_end" and event["agent"] != "final":
             tokens = event.get("prompt_tokens", 0) + event.get("completion_tokens", 0)
-            if not event.get("quiet"):
+            if not event.get("quiet") and not event.get("counted"):  # «counted»: già arrivati come llm_call
                 self.tokens += tokens
             name = event.get("name", event["agent"])
             if event.get("error"):
