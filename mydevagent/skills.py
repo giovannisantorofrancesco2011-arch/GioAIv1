@@ -11,8 +11,8 @@ un singolo file `<nome>.md`. In testa al file, opzionale:
 All'agente arriva solo l'elenco nome + descrizione; il contenuto lo legge con il tool `skill` quando una
 richiesta corrisponde. Cartelle lette, dalla più specifica: `.mydevagent/skills` e `.claude/skills` del
 progetto, `~/.mydevagent/skills`, `~/.claude/skills`, più quelle in MYDEVAGENT_SKILLS_DIRS (separate da `;`
-su Windows e `:` altrove), per esempio la cartella delle skill di un altro agente. Poi le skill e gli
-agenti dei plugin (vedi plugins.py).
+su Windows e `:` altrove), per esempio la cartella delle skill di un altro agente. Poi le skill dei
+plugin (vedi plugins.py).
 """
 
 from __future__ import annotations
@@ -91,8 +91,8 @@ def skill_dirs(root: Path) -> list[tuple[Path, str]]:
     state = Path(os.environ.get("MYDEVAGENT_STATE_DIR", home / ".mydevagent"))
     dirs = [(root / ".mydevagent" / "skills", "progetto"), (root / ".claude" / "skills", "progetto"),
             (state / "skills", "utente"), (home / ".claude" / "skills", "utente")]
-    for plugin in load_plugins(root).values():  # skill e agenti dei plugin (formato Claude Code)
-        dirs += [(d, f"plugin {plugin.name}") for kind in ("skills", "agents") for d in plugin.dirs(kind)]
+    for plugin in load_plugins(root).values():  # skill dei plugin (gli agenti sono in subagents.py)
+        dirs += [(d, f"plugin {plugin.name}") for d in plugin.dirs("skills")]
     for raw in os.environ.get("MYDEVAGENT_SKILLS_DIRS", "").split(os.pathsep):
         if raw.strip():
             dirs.append((Path(raw.strip()).expanduser(), "extra"))
@@ -126,12 +126,12 @@ def load_skills(root: Path) -> dict[str, Skill]:
 def skills_prompt(skills: dict[str, Skill]) -> str:
     if not skills:
         return ""
-    lines = "\n".join(f"- {s.name}: {_short(s.description)}" for s in skills.values())
+    lines = "\n".join(f"- {s.name}: {short(s.description)}" for s in skills.values())
     return ("# Skills\nThese skills contain expert instructions. When the request matches a skill, FIRST call "
             "the `skill` tool with its name, then follow its instructions.\n" + lines)
 
 
-def _short(text: str, limit: int = 160) -> str:
+def short(text: str, limit: int = 160) -> str:
     """Nel prompt basta l'inizio: con tanti plugin l'elenco resta piccolo anche per i modelli locali."""
     text = re.split(r"\s*(?:<example>|Examples?:)", text)[0]
     return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + "…"

@@ -4,7 +4,8 @@ import subprocess
 import pytest
 
 from mydevagent import plugins
-from mydevagent.skills import load_skills, skills_prompt
+from mydevagent.skills import load_skills
+from mydevagent.subagents import load_subagents, subagents_prompt
 from mydevagent.tui.extras import custom_commands, expand_command
 
 
@@ -67,9 +68,11 @@ def test_load_plugins_from_every_source(tmp_path, home, monkeypatch):
     assert rev.features() == ["hook"] and rev.version == "1.2.0"
 
     skills = load_skills(project)
-    assert skills["sicurezza"].source == skills["critico"].source == "plugin revisore"
-    assert "Sei un revisore severo." in skills["critico"].read()
-    assert skills_prompt(skills).endswith("- critico: Revisore severo.")  # niente esempi lunghi nel prompt
+    assert skills["sicurezza"].source == "plugin revisore" and "critico" not in skills
+    agents = load_subagents(project)  # gli agenti dei plugin sono sotto-agenti
+    assert agents["critico"].source == "plugin revisore" and agents["critico"].prompt == "Sei un revisore severo."
+    assert agents["critico"].allowed() == {"read_file"}
+    assert subagents_prompt(agents).endswith("- critico: Revisore severo.")  # niente esempi lunghi nel prompt
 
     desc, template = custom_commands(project)["/rivedi"]
     assert desc == "Rivede un file (plugin revisore)"

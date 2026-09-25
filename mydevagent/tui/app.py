@@ -41,6 +41,7 @@ from ..hooks import Hooks
 from ..mcp import McpManager
 from ..orchestrator import Orchestrator
 from ..skills import load_skills
+from ..subagents import load_subagents
 from ..tools.filesystem import Workspace
 from . import extras, mascot
 from .apply import apply_answer
@@ -70,7 +71,7 @@ COMMANDS = {
     "/model": "cambia modello principale · /model <nome> [--save]",
     "/models": "modelli installati e modelli in uso",
     "/pull": "scarica un modello da Ollama · /pull <nome>",
-    "/agents": "elenca gli agenti",
+    "/agents": "elenca gli agenti del team e i sotto-agenti (formato Claude Code)",
     "/files": "file allegati all'ultimo messaggio",
     "/cost": "token e tempo della sessione",
     "/think": "mostra/nascondi il ragionamento del modello",
@@ -502,6 +503,20 @@ class TuiApp:
                 group = "nucleo" if a.group == "core" else "ultra"
                 table.add_row(str(a.id), a.name, group, a.stage, " ".join("@" + x for x in a.aliases))
             c.print(table)
+            subs = load_subagents(self.root)
+            if subs:
+                table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2), expand=True)
+                for col in ("sotto-agente", "da"):
+                    table.add_column(col, no_wrap=True)
+                table.add_column("tool", no_wrap=True, overflow="ellipsis", max_width=28)
+                table.add_column("descrizione", no_wrap=True, overflow="ellipsis", ratio=1)
+                for sub in subs.values():
+                    table.add_row(f"[{ACCENT}]{escape(sub.name)}[/]", escape(sub.source),
+                                  escape(", ".join(sub.tools) if sub.tools else "tutti"), escape(sub.description))
+                c.print()
+                c.print(table)
+                c.print("[dim]L'agente li chiama da solo quando servono: lavorano in un contesto separato e "
+                        "gli riportano il risultato[/]")
         elif cmd == "/files":
             c.print("[dim]⎿  " + (", ".join(self.last_files) or "nessun file allegato") + "[/]")
         elif cmd == "/cost":
@@ -584,9 +599,11 @@ class TuiApp:
                                             f"{len(mcp_pending)} server MCP" if mcp_pending else ""]))
             self.console.print(f"[bold]Questo progetto ha {what}: programmi che partono da soli.[/]")
             for hook in hooks_pending[:8]:
-                self.console.print(f"  [dim]{hook.event}[/] {escape(hook.command[:90])} [dim]({hook.source})[/]")
+                self.console.print(f"  [dim]{hook.event}[/] {escape(hook.command[:90])} [dim]({hook.source})[/]",
+                                   highlight=False)
             for server in mcp_pending[:8]:
-                self.console.print(f"  [dim]MCP {escape(server.name)}[/] {escape(server.describe()[:90])}")
+                self.console.print(f"  [dim]MCP {escape(server.name)}[/] {escape(server.describe()[:90])}",
+                                   highlight=False)
             answer = self._reply("  Li attivo? Solo se ti fidi di questo progetto [s/N] › ")
             if answer.strip().lower() in ("s", "si", "sì", "y", "yes"):
                 hooks_mod.allow(self.root)
@@ -634,7 +651,7 @@ class TuiApp:
                 c.print(f"[red]⎿  {escape(server.name)}: {escape(server.error[:200])}[/]", highlight=False)
         if pending:
             c.print(f"[yellow]⎿  {len(pending)} server del progetto sono spenti: /mcp trust per attivarli[/]")
-        c.print("[dim]L'agente li usa da solo quando servono · /mcp reload li riavvia[/]")
+        c.print("[dim]L'agente li usa da solo quando servono · /mcp reload li riavvia[/]", highlight=False)
 
     def _hooks(self, arg: str) -> None:
         c = self.console

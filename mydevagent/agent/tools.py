@@ -12,9 +12,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ..graph import Cancelled
 from ..hooks import Hooks
 from ..mcp import McpManager
 from ..skills import Skill
+from ..subagents import SubAgent
 from ..tools.filesystem import IGNORED_DIRS, Workspace, WorkspaceError
 from .checkpoints import CheckpointStore
 from .permissions import EDIT_TOOLS, ApprovalRequest, Approver, PermissionPolicy, is_dangerous
@@ -22,6 +24,7 @@ from .permissions import EDIT_TOOLS, ApprovalRequest, Approver, PermissionPolicy
 MAX_RESULT_CHARS = 8000
 DEFAULT_READ_LINES = 250
 EventHandler = Callable[[dict[str, Any]], None]
+Spawn = Callable[["SubAgent", str], "tuple[str, AgentTools]"]
 
 SPECS: list[dict[str, Any]] = [
     {"name": "read_file", "description": "Read a text file with line numbers. Use offset/limit for big files.",
@@ -60,6 +63,11 @@ SPECS: list[dict[str, Any]] = [
      "parameters": {"type": "object", "properties": {
          "server": {"type": "string"}, "tool": {"type": "string"}, "arguments": {"type": "object"}},
          "required": ["server"]}},
+    {"name": "task", "description": "Delegate a self-contained job to a sub-agent (see the Sub-agents list). It "
+     "works in its own context with its own tools and returns only its final report. The prompt must contain "
+     "everything it needs: it cannot see this conversation.",
+     "parameters": {"type": "object", "properties": {
+         "agent": {"type": "string"}, "prompt": {"type": "string"}}, "required": ["agent", "prompt"]}},
     {"name": "skill", "description": "Load a skill's instructions by name (see the Skills list). With `file`, "
      "read one of the skill's supporting files.",
      "parameters": {"type": "object", "properties": {
@@ -113,7 +121,9 @@ class AgentTools:
                  approver: Approver | None = None, emit: EventHandler | None = None,
                  web_search: Callable[[str], str] | None = None, memory: str = "",
                  bash_timeout: int = 120, skills: dict[str, Skill] | None = None,
-                 hooks: Hooks | None = None, mcp: McpManager | None = None) -> None:
+                 hooks: Hooks | None = None, mcp: McpManager | None = None,
+                 subagents: dict[str, SubAgent] | None = None, spawn: Spawn | None = None,
+                 allowed: set[str] | None = None) -> None:
         self.root = Path(root).resolve()
         self.workspace = Workspace(self.root, allow_write=True)
         self.policy = policy
@@ -126,6 +136,9 @@ class AgentTools:
         self.skills = skills or {}
         self.hooks = hooks
         self.mcp = mcp
+        self.subagents = subagents or {}
+        self.spawn = spawn  # esegue un sotto-agente: lo fornisce il runner, che ha il modello
+        self.allowed = allowed  # None = tutti i tool (i sotto-agenti possono averne meno)
         self.todos: list[dict[str, str]] = []
         self.changed: list[str] = []
         self.read_paths: set[str] = set()
@@ -136,7 +149,9 @@ class AgentTools:
     # ----------------------------------------------------------------- spec
     def specs(self) -> list[dict[str, Any]]:
         specs = [s for s in SPECS if (s["name"] != "web_search" or self.web_search_fn)
-                 and (s["name"] != "skill" or self.skills) and (s["name"] != "mcp" or self.mcp)]
+                 and (s["name"] != "skill" or self.skills) and (s["name"] != "mcp" or self.mcp)
+                 and (s["name"] != "task" or (self.subagents and self.spawn))
+                 and (self.allowed is None or s["name"] in self.allowed)]
         if self.policy.mode == "plan":
             specs = [s for s in specs if s["name"] not in EDIT_TOOLS]
         return specs
@@ -147,7 +162,7 @@ class AgentTools:
     # -------------------------------------------------------------- dispatch
     def execute(self, name: str, args: dict[str, Any]) -> str:
         handler = getattr(self, f"_t_{name}", None)
-        if handler is None or name not in SPEC_BY_NAME:
+        if handler is None or name not in SPEC_BY_NAME or (self.allowed is not None and name not in self.allowed):
             return f"ERROR: unknown tool '{name}'. Available: {', '.join(s['name'] for s in self.specs())}"
         self.emit({"type": "tool_call", "agent": "agent", "tool": name, "args": _display_args(name, args)})
         blocked, reason = self._hook("PreToolUse", name, args)
@@ -160,6 +175,8 @@ class AgentTools:
                 result = f"ERROR: bad arguments for {name}: {exc}"
             except (WorkspaceError, FileNotFoundError, IsADirectoryError, UnicodeDecodeError) as exc:
                 result = f"ERROR: {type(exc).__name__}: {exc}"
+            except Cancelled:  # Esc durante un sotto-agente: ferma anche l'agente principale
+                raise
             except Exception as exc:  # un tool non deve mai far cadere il ciclo
                 result = f"ERROR: {name} failed: {type(exc).__name__}: {exc}"
             _, feedback = self._hook("PostToolUse", name, args, result)
@@ -278,6 +295,22 @@ class AgentTools:
         if denied:
             return denied
         return srv.call(tool, arguments)
+
+    def _t_task(self, agent: str = "", prompt: str = "", subagent_type: str = "", description: str = "") -> str:
+        name = (agent or subagent_type).strip().lower()  # subagent_type: il nome del campo in Claude Code
+        sub = self.subagents.get(name)
+        if sub is None or not self.spawn:
+            return f"ERROR: unknown sub-agent '{name}'. Available: {', '.join(self.subagents) or 'none'}"
+        if not prompt.strip():
+            return "ERROR: give the sub-agent a complete `prompt`."
+        report, child = self.spawn(sub, prompt)
+        for path in child.changed:  # le sue modifiche contano come nostre (footer, review, /undo)
+            if path not in self.changed:
+                self.changed.append(path)
+        self.last_test = child.last_test or self.last_test
+        self.user_denied = self.user_denied or child.user_denied
+        changed = f"\n\n(files changed by {name}: {', '.join(child.changed)})" if child.changed else ""
+        return f"Report from sub-agent {name}:\n{report}{changed}"
 
     def _t_grep(self, pattern: str, glob: str = "*") -> str:
         try:

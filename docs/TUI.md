@@ -140,7 +140,7 @@ in `MYDEVAGENT_SKILLS_DIRS` nel `.env`, separate da `;` su Windows, per esempio 
 
 ## Plugin (compatibili con Claude Code)
 Un plugin è una cartella con `.claude-plugin/plugin.json` e dentro `commands/` (comandi `/nome`), `skills/`
-(skill) e `agents/` (agenti specializzati: per MyDevAgent sono skill che l'agente legge quando servono).
+(skill) e `agents/` (sotto-agenti, vedi sotto).
 È lo stesso formato di Claude Code, quindi funzionano i plugin già pronti:
 
 ```
@@ -151,7 +151,8 @@ Un plugin è una cartella con `.claude-plugin/plugin.json` e dentro `commands/` 
 /plugin remove claude-code                 # toglie la cartella scaricata (e i plugin che contiene)
 ```
 
-Poi i comandi compaiono con `/` (anche come `/plugin:comando`) e le skill con `/skill`. Vengono caricati:
+Poi i comandi compaiono con `/` (anche come `/plugin:comando`), le skill con `/skill` e i sotto-agenti con
+`/agents`. Vengono caricati:
 i plugin in `.mydevagent/plugins/` del progetto, quelli installati con `/plugin install`
 (`~/.mydevagent/plugins/`), **quelli che hai già installato in Claude Code** e le cartelle in
 `MYDEVAGENT_PLUGINS_DIRS`.
@@ -178,7 +179,7 @@ che l'agente modifica e vietargli `git push`. In `.mydevagent/settings.json` (o 
 | `PreToolUse` | prima di un tool | bloccarlo (exit code 2: il testo su stderr arriva all'agente) |
 | `PostToolUse` | dopo un tool | dare un messaggio all'agente (exit 2 o `{"decision": "block", "reason": …}`) |
 | `UserPromptSubmit` | quando invii una richiesta | bloccarla, o aggiungere contesto (quello che stampa) |
-| `Stop` | quando l'agente vuole finire | chiedergli di continuare (exit 2 con il motivo) |
+| `Stop` · `SubagentStop` | quando l'agente (o un sotto-agente) vuole finire | chiedergli di continuare (exit 2 con il motivo) |
 | `SessionStart` | all'avvio (in background) | aggiungere contesto per tutta la sessione |
 
 Il comando riceve su stdin il JSON dell'evento (`tool_name`, `tool_input` con `file_path`, `prompt`…), con i
@@ -221,6 +222,29 @@ come in Claude Code.
 `/mcp` mostra i server e il loro stato, `/mcp reload` li riavvia, `/mcp trust` attiva quelli del progetto.
 Trasporti: `stdio` (un comando) e `http`. Il vecchio `sse` e il login OAuth non ci sono ancora: per i server
 remoti metti il token negli `headers`.
+
+## Sotto-agenti
+Agenti specializzati che l'agente principale chiama da solo, come in Claude Code: ognuno lavora in un
+contesto tutto suo (non vede la conversazione), con i suoi tool, e restituisce solo il resoconto finale.
+Così la ricerca nel codice o una review non riempiono il contesto dell'agente principale, che con i modelli
+locali è piccolo. Un file Markdown in `.mydevagent/agents/` o `.claude/agents/` (progetto),
+`~/.mydevagent/agents/` o `~/.claude/agents/` (tutti i progetti), oppure negli `agents/` dei plugin:
+
+```markdown
+---
+name: code-reviewer
+description: Rivede il codice appena modificato. Usalo dopo ogni modifica importante.
+tools: Read, Grep, Glob
+model: haiku
+---
+Sei un revisore severo: cerca bug, casi limite e nomi poco chiari. Non modificare i file.
+```
+
+`tools` è facoltativo (senza, ha tutti i tool) e accetta i nomi di Claude Code (`Read`, `Grep`, `Glob`,
+`Bash`, `Edit`, `Write`…) o quelli di MyDevAgent; `model: haiku` usa il modello veloce. Le modifiche di un
+sotto-agente passano dai soliti permessi e finiscono nel riepilogo, nella review e in `/undo`. Un
+sotto-agente non può chiamarne altri. Quando finisce partono gli hook `SubagentStop`. `/agents` li elenca
+sotto gli agenti del team.
 
 ## `/ultra-deep`
 35 agenti per i lavori importanti: ricerca web se serve, requisiti, piano con avvocato del diavolo,

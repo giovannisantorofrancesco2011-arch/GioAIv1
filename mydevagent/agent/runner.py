@@ -21,6 +21,7 @@ from ..hooks import Hooks
 from ..mcp import McpManager
 from ..skills import load_skills, skills_prompt
 from ..state import TeamState, render_files, render_history, truncate
+from ..subagents import SubAgent, load_subagents, subagents_prompt
 from ..tools.web_search import format_results
 from .checkpoints import CheckpointStore
 from .context import project_context, read_memory
@@ -103,13 +104,36 @@ class AgentRunner:
         web_fn = (lambda q: format_results(web.search(q))) if settings.tools.web.enabled else None
         memory = read_memory(self.root)
         skills = load_skills(self.root)
-        tools = AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
-                           web_search=web_fn, memory=memory, skills=skills, hooks=self.hooks, mcp=mcp)
-        self.checkpoints.begin(route.request)
+        subagents = load_subagents(self.root)
         hook_context = "\n".join(filter(None, (self.hooks.session_context, submitted.context)))
-        context = "\n\n".join(p for p in (skills_prompt(skills), mcp.prompt(),
-                                           project_context(self.root, route.request),
-                                           f"# Context from hooks\n{hook_context}" if hook_context else "") if p)
+        base_context = "\n\n".join(p for p in (skills_prompt(skills), mcp.prompt(),
+                                                project_context(self.root, route.request),
+                                                f"# Context from hooks\n{hook_context}" if hook_context else "")
+                                     if p)
+        context = "\n\n".join(p for p in (subagents_prompt(subagents), base_context) if p)
+
+        def tools_for(allowed: set[str] | None = None, **extra) -> AgentTools:
+            return AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
+                              web_search=web_fn, memory=memory, skills=skills, hooks=self.hooks, mcp=mcp,
+                              allowed=allowed, **extra)
+
+        def spawn(agent: SubAgent, prompt: str) -> tuple[str, AgentTools]:
+            """Un sotto-agente: contesto suo, i suoi tool (senza `task`: niente sotto-sotto-agenti)."""
+            child = tools_for(agent.allowed())
+            loop = AgentLoop(orch.llm, child, system=f"{agent.prompt}\n\n{base_context}".strip(), tier=agent.tier,
+                             max_steps=MAX_STEPS["fast"], native=settings.active_profile.native_tools, emit=emit,
+                             cancel=cancel, context_chars=settings.active_profile.num_ctx * 3,
+                             stop_event="SubagentStop")
+            emit({"type": "agent_start", "agent": agent.name, "name": f"Agente {agent.name}"})
+            started = time.perf_counter()
+            result = loop.run(prompt)
+            emit({"type": "agent_end", "agent": agent.name, "name": f"Agente {agent.name}",
+                  "ms": int((time.perf_counter() - started) * 1000), "prompt_tokens": result.prompt_tokens,
+                  "completion_tokens": result.completion_tokens, "tool_calls": result.tool_calls, "error": None})
+            return result.text or "(no report)", child
+
+        tools = tools_for(subagents=subagents, spawn=spawn)
+        self.checkpoints.begin(route.request)
 
         state: TeamState = {
             "request": route.request,
