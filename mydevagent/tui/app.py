@@ -543,7 +543,7 @@ class TuiApp:
                 table.add_row(f"[{ACCENT}]{escape(skill.name)}[/]", skill.source, escape(skill.description))
             self.console.print(table)
             self.console.print("[dim]L'agente le usa da solo quando servono · /skill <nome> <richiesta> per "
-                               "forzarne una[/]")
+                               "forzarne una[/]", highlight=False)
             return
         skill = skills.get(name.lower())
         if skill is None:
