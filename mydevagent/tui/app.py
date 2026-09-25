@@ -9,10 +9,13 @@ Architettura:
 
 from __future__ import annotations
 
+import contextlib
+import getpass
 import json
 import queue
 import re
 import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -48,11 +51,11 @@ from ..skills import load_skills
 from ..subagents import load_subagents
 from ..tools import preview as preview_mod
 from ..tools.filesystem import Workspace, WorkspaceError, display_path
-from . import extras, mascot
+from . import extras, mascot, multi
 from .apply import apply_answer
 from .completion import DevCompleter
 from .keys import EscWatcher
-from .render import ACCENT, THEME, TurnRenderer, render_diff, set_theme
+from .render import ACCENT, THEME, TurnRenderer, markdown, render_diff, set_theme
 from .session import Session, list_sessions, state_dir
 
 COMMANDS = {
@@ -74,6 +77,8 @@ COMMANDS = {
     "/add-dir": "lavora anche su un'altra cartella (es. il backend) · /add-dir <cartella> · /add-dir rimuovi <cartella>",
     "/anteprima": "apre nel browser il sito del progetto (su localhost) · /anteprima <file.html | url>",
     "/new": "crea un progetto pronto: sito, gioco, bot-discord, api, python · /new <modello> [nome]",
+    "/multi": "multigiocatore: gli amici sulla tua rete seguono la sessione dal browser e scrivono all'agente "
+              "· /multi stop",
     "/init": "crea MYDEVAGENT.md con comandi e convenzioni del progetto",
     "/memory": "mostra la memoria del progetto · /memory <testo> aggiunge una nota",
     "/compact": "riassume la conversazione per liberare contesto",
@@ -103,6 +108,7 @@ SHELL_TIMEOUT = 120
 MAX_SHELL_OUTPUT = 8000
 NOTIFY_AFTER_S = 20
 AUTO_COMPACT_MESSAGES = 20
+GUEST_TURN = object()  # l'input si chiude da solo: ha scritto un amico collegato con /multi
 
 
 class TuiApp:
@@ -159,6 +165,9 @@ class TuiApp:
         names = {"/skill": lambda: list(load_skills(self.root)), "/new": lambda: list(templates.TEMPLATES)}
         self.completer.arguments = {**names, "/skills": names["/skill"]}
         self._vio_event: tuple[str | None, str, tuple] | None = None
+        self.room: multi.Room | None = None  # multigiocatore (/multi)
+        self._at_prompt = False
+        self._draft = ""  # quello che stavi scrivendo quando è arrivato il messaggio di un amico
         self.say("Ciao, sono Vio! Scrivi qui sotto cosa vuoi fare.")
         self.prompt = self._build_prompt(prompt_input, prompt_output, animate=background)
         if background:
@@ -320,6 +329,8 @@ class TuiApp:
     def say(self, text: str, expression: str | None = None) -> None:
         """Cosa dice Vio sopra l'input. Vale finché non cambi modalità."""
         self._vio_event = (expression, text, self._mode_key())
+        if self.room:
+            self.room.publish({"kind": "vio", "text": text})
 
     def vio_state(self) -> tuple[str, str]:
         """(espressione, frase) di Vio in questo momento."""
@@ -520,6 +531,8 @@ class TuiApp:
             self._new(arg)
         elif cmd == "/add-dir":
             self._add_dir(arg)
+        elif cmd == "/multi":
+            self._multi(arg)
         elif cmd == "/anteprima":
             self._preview(arg)
         elif cmd == "/impara":
@@ -716,6 +729,74 @@ class TuiApp:
         self.console.print("  [dim]⎿  " + ("aperta nel browser" if opened else "aprila nel browser")
                            + " · resta accesa finché MyDevAgent è aperto · l'agente la guarda da solo quando "
                              "serve[/]", highlight=False)
+
+    def _multi(self, arg: str) -> None:
+        """/multi: gli amici sulla tua rete seguono la sessione dal browser e scrivono all'agente."""
+        c = self.console
+        if arg.lower() in ("stop", "off", "chiudi"):
+            if self.room:
+                self.room.system(f"{self.room.host} ha chiuso la sessione")
+                self.room.close()
+                self.room = None
+                self.say("Sessione chiusa: siamo di nuovo solo noi due.", "done")
+            c.print("[dim]⎿  multigiocatore spento[/]")
+            return
+        opened = self.room is None
+        if opened:
+            try:
+                host = getpass.getuser()
+            except Exception:
+                host = "host"
+            try:
+                self.room = multi.Room(host)
+            except OSError as exc:
+                c.print(f"[red]⎿  non riesco ad aprire la sessione: {escape(str(exc))}[/]", highlight=False)
+                return
+            self.room.on_message = self._wake
+            self.room.on_join = lambda name: self.say(f"{name} si è collegato! Ora lavoriamo insieme.", "love")
+            for m in self.session.history[-4:]:  # chi entra vede com'eravate rimasti
+                if m["role"] == "user":
+                    self.room.publish({"kind": "message", "who": host, "text": m["content"]})
+                else:
+                    self.room.console.print(markdown(m["content"]))
+                    self.room.flush()
+            self.say("Multigiocatore acceso! Manda il link ai tuoi amici.", "love")
+        link = self.room.link()
+        c.print("[green]⏺[/] Multigiocatore: chi è sulla tua stessa rete (Wi-Fi) apre questo link", highlight=False)
+        c.print(f"  [dim]⎿[/]  [bold {ACCENT}]{link}[/]", highlight=False)
+        c.print(f"     [dim]codice {self.room.code} · /multi stop per chiudere[/]", highlight=False)
+        c.print("     [dim]vede cosa fa l'agente e gli scrive; modifiche e comandi li confermi sempre tu[/]")
+        if self.room.guests:
+            c.print(f"     [dim]si sono collegati: {escape(', '.join(self.room.guests))}[/]", highlight=False)
+        if "//127." in link:
+            c.print("     [yellow]non vedo nessuna rete: collegati al Wi-Fi e rifai /multi[/]")
+        elif opened and sys.platform == "win32":
+            c.print("     [dim]se Windows chiede il permesso per Python, consentilo sulle reti private[/]")
+
+    def _wake(self) -> None:
+        """Un amico ha scritto: se sei fermo all'input lo faccio passare (quello che stavi scrivendo resta lì)."""
+        loop = self.prompt.app.loop
+        if self._at_prompt and loop:
+            with contextlib.suppress(RuntimeError):  # l'input si è appena chiuso
+                loop.call_soon_threadsafe(self._leave_prompt)
+
+    def _leave_prompt(self) -> None:
+        app = self.prompt.app
+        if self._at_prompt and app.future and not app.future.done():
+            self._draft = app.current_buffer.text
+            app.exit(result=GUEST_TURN)
+
+    def _guests_waiting(self) -> None:
+        if self.room and not self.room.inbox.empty():
+            self._leave_prompt()
+
+    def _handle_guests(self) -> None:
+        """I messaggi degli amici: l'agente li esegue come i tuoi."""
+        while self.room and (message := self.room.next_message()):
+            name, text = message
+            self.console.print(f"[{ACCENT}]›[/] [bold]{escape(name)}:[/] {escape(text)}", highlight=False)
+            self.submit(f"{name}: {text}", guest=True)
+            self.console.print()
 
     def switch_root(self, path: Path) -> None:
         """Lavora in un'altra cartella (dopo /new): conversazione, checkpoint, permessi e plugin di lì."""
@@ -1141,7 +1222,7 @@ class TuiApp:
                 files[candidate] = path.read_text(encoding="utf-8", errors="replace")
         return files
 
-    def submit(self, text: str, display: str | None = None) -> str:
+    def submit(self, text: str, display: str | None = None, guest: bool = False) -> str:
         if len(self.session.history) >= AUTO_COMPACT_MESSAGES:
             self._compact()
         files = self.collect_attachments(text)
@@ -1150,14 +1231,26 @@ class TuiApp:
         files.update(self.pending_context)
         self.pending_context = {}
         self.last_files = files
-        answer = self.run_turn(text, files)
+        if self.room and not guest:
+            self.room.publish({"kind": "message", "who": self.room.host, "text": display or text})
+        mode = self.policy.mode
+        if guest and mode in ("auto", "auto-edit"):
+            self.policy.mode = "ask"  # quello che chiede un amico lo confermi sempre tu
+        try:
+            answer = self.run_turn(text, files)
+        finally:
+            self.policy.mode = mode
         self.session.add_turn(display or text, answer)
         return answer
 
     def run_turn(self, text: str, files: dict[str, str]) -> str:
         events: queue.Queue = queue.Queue()
         cancel = threading.Event()
-        renderer = TurnRenderer(self.console, self.names)
+        room = self.room
+        out = multi.Tee(self.console, room.console) if room else self.console  # con /multi lo vedono anche gli amici
+        renderer = TurnRenderer(out, self.names)
+        if room:
+            room.publish({"kind": "busy", "on": True})
         started = time.monotonic()
         pending_replies: list[queue.Queue] = []
         mode = None if self.mode == "auto" else self.mode
@@ -1226,11 +1319,20 @@ class TuiApp:
                             continue
                         live.stop()
                         watcher.__exit__(None, None, None)
+                        if room:
+                            if req.diff:
+                                room.console.print(f"[{ACCENT}]⏺[/] [bold]{escape(req.summary)}[/]")
+                                room.console.print(render_diff(req.diff, max_lines=80))
+                            room.console.print(f"  [dim]⎿  {escape(room.host)} deve confermare…[/]")
+                            room.flush()
                         try:
                             answer = self.ask_approval(req)
                         except (KeyboardInterrupt, EOFError):
                             answer = ("no", "")
                             interrupt()
+                        if room:
+                            room.console.print("  [dim]⎿  confermato[/]" if answer[0] != "no"
+                                               else "  [red]⎿  non confermato[/]")
                         if answer[0] != "no" and req.tool in ("edit_file", "write_file"):
                             renderer.shown_diffs.add(req.args.get("path", ""))
                         reply.put(answer)
@@ -1239,12 +1341,14 @@ class TuiApp:
                     elif kind == "error":
                         title, hint = health.explain_error(value, self.orch.settings)
                         failed = title
-                        self.console.print(f"[red]⏺ {escape(title)}[/]\n  [dim]⎿  {escape(hint)}[/]")
+                        out.print(f"[red]⏺ {escape(title)}[/]\n  [dim]⎿  {escape(hint)}[/]")
                     elif kind == "chunk":
                         renderer.on_chunk(value)
                     else:
                         renderer.on_event(value)
                     live.update(renderer.view())
+                    if room:
+                        room.flush()
                 except KeyboardInterrupt:
                     if interrupt():
                         abandoned = True
@@ -1253,6 +1357,9 @@ class TuiApp:
         renderer.finish()
         if abandoned:
             self.console.print("[dim]  ⎿  l'agente in corso terminerà in background[/]")
+        if room:
+            room.flush()
+            room.publish({"kind": "busy", "on": False})
         elapsed = time.monotonic() - started
         self.stats["turns"] += 1
         self.stats["seconds"] += elapsed
@@ -1280,8 +1387,14 @@ class TuiApp:
             threading.Thread(target=self._check_updates, daemon=True).start()
         while True:
             self.console.print()
+            self._handle_guests()
             try:
-                text = self.prompt.prompt(self.prompt_message).strip()
+                self._at_prompt = True
+                draft, self._draft = self._draft, ""
+                text = self.prompt.prompt(self.prompt_message, default=draft, pre_run=self._guests_waiting)
+                if text is GUEST_TURN:
+                    continue
+                text = text.strip()
                 if text:
                     self.console.print(f"[{ACCENT}]›[/] {escape(text)}", highlight=False)
             except KeyboardInterrupt:
@@ -1293,6 +1406,8 @@ class TuiApp:
                 continue
             except EOFError:
                 break
+            finally:
+                self._at_prompt = False
             if not text:
                 continue
             if text.startswith("!"):
@@ -1309,6 +1424,9 @@ class TuiApp:
                 continue
             self.submit(text)
         self.mcp.close()
+        if self.room:
+            self.room.system(f"{self.room.host} ha chiuso MyDevAgent")
+            self.room.close()
         self.session.save()
         self.console.print(f"[dim]Sessione salvata: {self.session.id} · riprendi con `mydevagent --continue`[/]")
 

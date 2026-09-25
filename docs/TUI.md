@@ -86,6 +86,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/anteprima [file \| url]` | apre nel browser il sito del progetto, servito su localhost |
 | `/impara` · `/impara off` | modalità impara: spiega cosa fa e ti lascia scrivere un pezzo di codice |
 | `/new [modello] [nome]` | crea un progetto pronto (sito, gioco, bot-discord, api, python) e ci lavora dentro |
+| `/multi` · `/multi stop` | multigiocatore: gli amici sulla tua rete seguono la sessione dal browser e scrivono all'agente |
 | `/init` | l'agente analizza il progetto e crea `MYDEVAGENT.md` (comandi, architettura, convenzioni) |
 | `/memory [testo]` | mostra la memoria del progetto · aggiunge una nota |
 | `/compact` | riassume la conversazione (automatico oltre 10 turni) |
@@ -160,6 +161,21 @@ Per imparare mentre programmi, come lo stile «Learning» di Claude Code. Con `/
 Quando hai scritto il tuo pezzo diglielo («fatto»): lo legge e ti dice cosa va e cosa sistemare. I test che
 provano il tuo pezzo possono fallire finché non lo scrivi, e la review non lo conta come errore. Vio mostra
 «impara» sopra l'input; la scelta resta anche ai prossimi avvii, `/impara off` la spegne.
+
+## Multigiocatore: `/multi`
+Per programmare insieme a un amico che è sulla tua stessa rete (lo stesso Wi-Fi). `/multi` mostra un link
+con un codice, per esempio `http://192.168.1.23:8765/?codice=K7M2QP`: l'amico lo apre nel browser (PC o
+telefono, non deve installare niente), scrive il suo nome ed entra.
+- vede quello che vedi tu nel terminale: le righe `⏺`/`⎿` dei tool, i diff colorati e le risposte;
+- scrive all'agente dalla pagina: il messaggio compare da te come `› Marco: …` e l'agente lo esegue come
+  i tuoi (se stavi scrivendo qualcosa resta lì, lo ritrovi dopo);
+- le modifiche ai file e i comandi chiesti da un amico li **confermi sempre tu**, anche se sei in modalità
+  auto; lui vede «deve confermare…» e poi com'è andata. I comandi `/`, `!` e `#` restano solo tuoi.
+
+Vio ti dice quando qualcuno si collega, e `/multi` mostra di nuovo link e chi è entrato. `/multi stop` (o
+l'uscita da MyDevAgent) chiude la sessione. Dai il codice solo a chi ti fidi: tramite l'agente può leggere
+i file del progetto (non `.env` e le chiavi). La prima volta Windows può chiedere il permesso per Python nel
+firewall: consentilo sulle reti private.
 
 ## Memoria del progetto: `MYDEVAGENT.md`
 Un file nella radice del progetto con comandi, architettura e convenzioni: l'agente lo legge a ogni
@@ -324,6 +340,7 @@ Integratore capo, fino a 3 giri di correzione, documentazione e release. Le fasi
 | `keys.py` | `Esc` durante il lavoro (quando prompt_toolkit non legge la tastiera) |
 | `extras.py` | comandi personalizzati, compattazione, notifiche, warmup del modello |
 | `completion.py` · `apply.py` · `session.py` | completamento · `/apply` · sessioni e `/resume` |
+| `multi.py` · `multi.html` | `/multi`: la stanza (server HTTP con il feed in Server-Sent Events) e la pagina per gli amici |
 
 ### Aggiungere un comando
 Aggiungi nome e descrizione a `COMMANDS` in `app.py` e gestiscilo in `TuiApp.handle_command`

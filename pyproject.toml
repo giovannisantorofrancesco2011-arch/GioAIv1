@@ -40,7 +40,7 @@ mydevagent = "mydevagent.cli:app"
 include = ["mydevagent*"]
 
 [tool.setuptools.package-data]
-mydevagent = ["py.typed", "templates/*/*"]
+mydevagent = ["py.typed", "templates/*/*", "tui/*.html"]
 
 [tool.ruff]
 line-length = 110
