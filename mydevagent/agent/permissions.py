@@ -17,7 +17,7 @@ MODE_LABELS = {
     "plan": "piano (sola lettura)",
     "auto": "tutto automatico",
 }
-READ_TOOLS = {"read_file", "list_files", "grep", "web_search", "todo_write", "git_diff"}
+READ_TOOLS = {"read_file", "list_files", "grep", "web_search", "todo_write", "git_diff", "skill"}
 EDIT_TOOLS = {"edit_file", "write_file"}
 EXEC_TOOLS = {"bash", "run_tests"}
 

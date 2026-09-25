@@ -12,6 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ..skills import Skill
 from ..tools.filesystem import IGNORED_DIRS, Workspace, WorkspaceError
 from .checkpoints import CheckpointStore
 from .permissions import EDIT_TOOLS, ApprovalRequest, Approver, PermissionPolicy, is_dangerous
@@ -52,6 +53,10 @@ SPECS: list[dict[str, Any]] = [
          "required": ["todos"]}},
     {"name": "web_search", "description": "Search the web for up-to-date docs, versions, errors (only online).",
      "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "skill", "description": "Load a skill's instructions by name (see the Skills list). With `file`, "
+     "read one of the skill's supporting files.",
+     "parameters": {"type": "object", "properties": {
+         "name": {"type": "string"}, "file": {"type": "string"}}, "required": ["name"]}},
 ]
 SPEC_BY_NAME = {s["name"]: s for s in SPECS}
 
@@ -100,7 +105,7 @@ class AgentTools:
     def __init__(self, root: Path, policy: PermissionPolicy, checkpoints: CheckpointStore,
                  approver: Approver | None = None, emit: EventHandler | None = None,
                  web_search: Callable[[str], str] | None = None, memory: str = "",
-                 bash_timeout: int = 120) -> None:
+                 bash_timeout: int = 120, skills: dict[str, Skill] | None = None) -> None:
         self.root = Path(root).resolve()
         self.workspace = Workspace(self.root, allow_write=True)
         self.policy = policy
@@ -110,6 +115,7 @@ class AgentTools:
         self.web_search_fn = web_search
         self.memory = memory
         self.bash_timeout = bash_timeout
+        self.skills = skills or {}
         self.todos: list[dict[str, str]] = []
         self.changed: list[str] = []
         self.read_paths: set[str] = set()
@@ -119,7 +125,8 @@ class AgentTools:
 
     # ----------------------------------------------------------------- spec
     def specs(self) -> list[dict[str, Any]]:
-        specs = SPECS if self.web_search_fn else [s for s in SPECS if s["name"] != "web_search"]
+        specs = [s for s in SPECS if (s["name"] != "web_search" or self.web_search_fn)
+                 and (s["name"] != "skill" or self.skills)]
         if self.policy.mode == "plan":
             specs = [s for s in specs if s["name"] not in EDIT_TOOLS]
         return specs
@@ -203,6 +210,13 @@ class AgentTools:
                 out.append("… (truncated, use a narrower path or pattern)")
                 break
         return "\n".join(out) or "no files"
+
+    def _t_skill(self, name: str, file: str | None = None) -> str:
+        skill = self.skills.get(name.strip().lstrip("/").lower())
+        if skill is None:
+            return f"ERROR: unknown skill '{name}'. Available: {', '.join(self.skills) or 'none'}"
+        self.emit({"type": "info", "text": f"skill {skill.name}" + (f" · {file}" if file else "")})
+        return skill.read(file)
 
     def _t_grep(self, pattern: str, glob: str = "*") -> str:
         try:

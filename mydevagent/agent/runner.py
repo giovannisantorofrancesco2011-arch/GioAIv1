@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ..graph import Cancelled, Team
+from ..skills import load_skills, skills_prompt
 from ..state import TeamState, render_files, render_history, truncate
 from ..tools.web_search import format_results
 from .checkpoints import CheckpointStore
@@ -77,10 +78,11 @@ class AgentRunner:
         web = orch.toolbox.ctx.web
         web_fn = (lambda q: format_results(web.search(q))) if settings.tools.web.enabled else None
         memory = read_memory(self.root)
+        skills = load_skills(self.root)
         tools = AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
-                           web_search=web_fn, memory=memory)
+                           web_search=web_fn, memory=memory, skills=skills)
         self.checkpoints.begin(route.request)
-        context = project_context(self.root, route.request)
+        context = "\n\n".join(p for p in (skills_prompt(skills), project_context(self.root, route.request)) if p)
 
         state: TeamState = {
             "request": route.request,

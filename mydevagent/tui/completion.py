@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from prompt_toolkit.completion import Completer, Completion
@@ -17,6 +18,7 @@ class DevCompleter(Completer):
         self.aliases = aliases  # alias → chiave agente
         self.root = root
         self._files: list[str] | None = None
+        self.skill_names: Callable[[], list[str]] = list  # impostato dalla UI
 
     @property
     def files(self) -> list[str]:
@@ -35,7 +37,12 @@ class DevCompleter(Completer):
     def get_completions(self, document, complete_event):
         word = document.get_word_before_cursor(WORD=True)
         before = document.text_before_cursor
-        if word.startswith("/") and before.strip() == word:
+        parts = before.split(" ")
+        if len(parts) == 2 and parts[0].lower() in ("/skill", "/skills"):
+            for name in self.skill_names():
+                if name.startswith(parts[1].lower()):
+                    yield Completion(name, -len(parts[1]), display_meta="skill")
+        elif word.startswith("/") and before.strip() == word:
             for cmd, desc in self.commands.items():
                 if cmd.startswith(word.lower()):
                     yield Completion(cmd, -len(word), display_meta=desc)

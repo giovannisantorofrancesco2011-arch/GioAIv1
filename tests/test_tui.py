@@ -234,3 +234,26 @@ def test_vio_reacts_to_modes(settings, project):
     text = "".join(t for _, t in app.prompt_message())
     assert "Vio · modalità plan · team deep" in text and "Grazie! ♥" in text and "▀" in text
     assert text.endswith("› ") and len(text.splitlines()) == 6  # 4 righe di Vio, la riga, l'input
+
+
+def test_skill_command(settings, project, tmp_path, monkeypatch):
+    from tests.test_agent import ScriptedLLM
+
+    folder = project / ".mydevagent" / "skills" / "saluti"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text("---\ndescription: Saluta in dialetto.\n---\nRispondi sempre in napoletano.\n")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    llm = ScriptedLLM(steps=["Uè!"])
+    console = record_console()
+    with create_pipe_input() as pipe:
+        app = TuiApp(Orchestrator(settings, llm=llm), console=console, prompt_input=pipe,
+                     prompt_output=DummyOutput(), root=project, background=False)
+    assert list(completions(app.completer, "/skill sa")) == ["saluti"]
+    app.handle_command("/skill")
+    app.handle_command("/skill saluti ciao a tutti")
+    app.handle_command("/skill boh")
+    out = console.export_text()
+    assert "saluti" in out and "Saluta in dialetto." in out and "skill sconosciuta: boh" in out
+    request = llm.calls[-1]["messages"][-1]["content"]
+    assert "Rispondi sempre in napoletano." in request and "ciao a tutti" in request
+    assert app.session.history[-2]["content"] == "/skill saluti ciao a tutti"

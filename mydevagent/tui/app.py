@@ -36,6 +36,7 @@ from ..agent.permissions import MODES as PERMISSION_MODES
 from ..agent.runner import AgentRunner
 from ..config import load_settings
 from ..orchestrator import Orchestrator
+from ..skills import load_skills
 from ..tools.filesystem import Workspace
 from . import extras, mascot
 from .apply import apply_answer
@@ -73,6 +74,7 @@ COMMANDS = {
     "/doctor": "verifica backend, modelli, rete, sandbox",
     "/theme": "tema dark / light",
     "/vio": "saluta Vio, la mascotte (e accarezzala)",
+    "/skill": "skill disponibili · /skill <nome> [richiesta] per usarne una",
     "/resume": "riprendi una sessione precedente in questa cartella",
     "/export": "salva la conversazione in Markdown",
     "/clear": "nuova conversazione",
@@ -129,6 +131,7 @@ class TuiApp:
         self._load_prefs()
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
+        self.completer.skill_names = lambda: list(load_skills(self.root))
         self._vio_event: tuple[str | None, str, tuple] | None = None
         self.say("Ciao, sono Vio! Scrivi qui sotto cosa vuoi fare.")
         self.prompt = self._build_prompt(prompt_input, prompt_output, animate=background)
@@ -309,6 +312,9 @@ class TuiApp:
 
         settings = self.orch.settings
         memory = "MYDEVAGENT.md ✓" if read_memory(self.root) else "nessuna memoria (/init per crearla)"
+        skills = load_skills(self.root)
+        skill_line = (f"{len(skills)} caricate · /skill per vederle" if skills
+                      else "nessuna (.mydevagent/skills/<nome>/SKILL.md)")
         tiers = " · ".join(f"{t} {settings.resolve_model(t)[0]}" for t in ("fast", "reasoning"))
         body = (
             f"[bold {ACCENT}]✻[/] [bold]Benvenuto in MyDevAgent[/]  [dim]v{__version__} · "
@@ -316,7 +322,8 @@ class TuiApp:
             f"[dim]cwd:[/]      {escape(str(self.root))}\n"
             f"[dim]profilo:[/]  {settings.profile} · [dim]modello:[/] {escape(self.model)} [dim]· {escape(tiers)}[/]\n"
             f"[dim]hardware:[/] {self._hardware}\n"
-            f"[dim]memoria:[/]  {memory}\n\n"
+            f"[dim]memoria:[/]  {memory}\n"
+            f"[dim]skill:[/]    {skill_line}\n\n"
             "[dim]Suggerimenti:[/]\n"
             f"  [{ACCENT}]•[/] chiedi di modificare il codice: l'agente legge, modifica, lancia i test e ti mostra i diff\n"
             f"  [{ACCENT}]•[/] [bold]/[/] comandi · [bold]@file[/] allega · [bold]![/]shell · [bold]#[/]nota in memoria\n"
@@ -494,6 +501,8 @@ class TuiApp:
             from ..cli import doctor
 
             doctor(profile=None)
+        elif cmd in ("/skill", "/skills"):
+            self._skill(arg)
         elif cmd == "/vio":
             self._pats = getattr(self, "_pats", 0) + 1
             self.say(mascot.PATS[(self._pats - 1) % len(mascot.PATS)], "love")
@@ -518,6 +527,32 @@ class TuiApp:
         else:
             c.print(f"[red]⎿  comando sconosciuto: {escape(cmd)}[/] [dim](/help)[/]")
         return True
+
+    def _skill(self, arg: str) -> None:
+        skills = load_skills(self.root)
+        name, _, request = arg.partition(" ")
+        if not name or name == "list":
+            if not skills:
+                self.console.print("[dim]⎿  Nessuna skill. Creane una in .mydevagent/skills/<nome>/SKILL.md "
+                                   "(guida: docs/TUI.md)[/]")
+                return
+            table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
+            for col in ("skill", "da", "descrizione"):
+                table.add_column(col)
+            for skill in skills.values():
+                table.add_row(f"[{ACCENT}]{escape(skill.name)}[/]", skill.source, escape(skill.description))
+            self.console.print(table)
+            self.console.print("[dim]L'agente le usa da solo quando servono · /skill <nome> <richiesta> per "
+                               "forzarne una[/]")
+            return
+        skill = skills.get(name.lower())
+        if skill is None:
+            self.console.print(f"[red]⎿  skill sconosciuta: {escape(name)}[/] [dim](/skill per l'elenco)[/]")
+            return
+        task = request.strip() or "Apply this skill to the current project."
+        self.say(f"Uso la skill {skill.name}.", "think")
+        self.submit(f"Follow the skill `{skill.name}` for this request.\n\n{skill.read()}\n\n# Request\n{task}",
+                    display=f"/skill {arg}")
 
     def _rewind(self) -> None:
         checkpoints = self.checkpoints.list()

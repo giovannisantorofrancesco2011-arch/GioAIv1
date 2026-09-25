@@ -85,6 +85,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/compact` | riassume la conversazione (automatico oltre 10 turni) |
 | `/model <nome>` · `/models` | cambia modello per la sessione (`--save` lo ricorda nel `.env`) · modelli installati e in uso |
 | `/pull <nome>` | scarica un modello da Ollama con barra di avanzamento |
+| `/skill` · `/skill <nome> <richiesta>` | skill disponibili · usa una skill per questa richiesta |
 | `/vio` | saluta (e accarezza) Vio, la mascotte |
 | `/agents` | i 35 agenti (nucleo e ultra) |
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
@@ -109,6 +110,29 @@ description: scrive i test mancanti per un file
 Leggi $ARGUMENTS, individua i casi non coperti e scrivi test con il framework del progetto. Poi eseguili.
 ```
 → `/testa src/api/users.py`
+
+## Skill
+Istruzioni da esperto riutilizzabili, come le skill di Claude Code e di BluAgent. All'agente arriva solo
+l'elenco nome + descrizione: il contenuto lo legge (con il tool `skill`, senza chiederti il permesso) solo
+quando una richiesta corrisponde, così non riempie il contesto.
+
+Una skill è una cartella con `SKILL.md` e, se servono, file di supporto (modelli, esempi, script) che
+l'agente può leggere; oppure un singolo file `<nome>.md`.
+
+```markdown
+---
+name: changelog
+description: Scrive il changelog dal git log. Usala quando chiedo un changelog o le note di rilascio.
+---
+Leggi `git log` dall'ultimo tag, raggruppa per Aggiunto / Corretto e segui templates/base.md.
+```
+
+Cartelle lette (a parità di nome vince la prima): `.mydevagent/skills/` e `.claude/skills/` del progetto,
+`~/.mydevagent/skills/`, `~/.claude/skills/` (quindi anche le skill che usi con Claude Code), più quelle
+in `MYDEVAGENT_SKILLS_DIRS` nel `.env`, separate da `;` su Windows, per esempio le skill di BluAgent:
+`MYDEVAGENT_SKILLS_DIRS=C:\Users\Santoro\BluAgent\skills`.
+
+`/skill` le elenca, `/skill changelog prepara la 1.1` obbliga l'agente a usare quella skill.
 
 ## `/ultra-deep`
 35 agenti per i lavori importanti: ricerca web se serve, requisiti, piano con avvocato del diavolo,

@@ -64,6 +64,7 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 | Repo map con classi e funzioni del progetto | Aider | automatica |
 | Ricerca semantica sul codice (RAG), indicizzata in background | Cursor | automatica, `/index` |
 | Comandi personalizzati in `.mydevagent/commands/*.md` | Claude Code | `/nome` |
+| Skill in cartelle (`SKILL.md` + file di supporto), caricate solo quando servono | Claude Code, BluAgent | `/skill` |
 | Compattazione della conversazione | Claude Code | `/compact`, automatica |
 | Team multi-agente con review sul diff reale e dibattito sul piano | MyDevAgent | `/balanced` `/deep` `/ultra-deep` |
 

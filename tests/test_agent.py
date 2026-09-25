@@ -28,9 +28,9 @@ class ScriptedLLM(FakeLLM):
         return super().complete(messages, tier=tier, max_tokens=max_tokens, temperature=temperature)
 
 
-def T(name, **args):
+def T(tool, **args):
     import json
-    return f'<tool name="{name}">{json.dumps(args)}</tool>'
+    return f'<tool name="{tool}">{json.dumps(args)}</tool>'
 
 
 @pytest.fixture
@@ -299,3 +299,57 @@ def test_footer_warns_when_nothing_changed(project, settings):
     out = "".join(AgentRunner(Orchestrator(settings, llm=llm), project,
                               PermissionPolicy(mode="auto", root=project)).run("/fast aggiungi sub in calc"))
     assert "⚠️ Nessun file modificato" in out
+
+
+# ---------------------------------------------------------------------- skill
+def write_skills(project, tmp_path, monkeypatch):
+    skill = project / ".mydevagent" / "skills" / "changelog"
+    (skill / "templates").mkdir(parents=True)
+    (skill / "SKILL.md").write_text("---\nname: changelog\ndescription: Scrive il changelog dal git log.\n---\n"
+                                    "# Changelog\nRaggruppa per Added/Fixed. Usa templates/base.md.\n")
+    (skill / "templates" / "base.md").write_text("## [versione]\n")
+    user = tmp_path / "state" / "skills"
+    user.mkdir(parents=True)
+    (user / "changelog.md").write_text("versione utente, deve perdere contro il progetto\n")
+    (user / "Stile Commit.md").write_text("# Messaggi di commit brevi all'imperativo\n")
+    extra = tmp_path / "bluagent-skill"
+    extra.mkdir()
+    (extra / "traduci.md").write_text("Traduci in inglese mantenendo il codice.\n")
+    monkeypatch.setenv("MYDEVAGENT_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("MYDEVAGENT_SKILLS_DIRS", str(extra))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def test_load_skills_sources_and_reading(project, tmp_path, monkeypatch):
+    from mydevagent.skills import load_skills, skills_prompt
+
+    write_skills(project, tmp_path, monkeypatch)
+    skills = load_skills(project)
+    assert set(skills) == {"changelog", "stile-commit", "traduci"}
+    assert skills["changelog"].source == "progetto" and skills["traduci"].source == "extra"
+    assert skills["stile-commit"].description == "Messaggi di commit brevi all'imperativo"
+    body = skills["changelog"].read()
+    assert "Raggruppa per Added/Fixed" in body and "- templates/base.md" in body and "---" not in body
+    assert skills["changelog"].read("templates/base.md") == "## [versione]\n"
+    assert skills["changelog"].read("../../../.env").startswith("ERROR")  # niente uscite dalla cartella
+    prompt = skills_prompt(skills)
+    assert "- changelog: Scrive il changelog dal git log." in prompt and "`skill` tool" in prompt
+
+
+def test_agent_uses_skill_tool(project, settings, tmp_path, monkeypatch):
+    write_skills(project, tmp_path, monkeypatch)
+    llm = ScriptedLLM(steps=[T("skill", name="changelog"), "Ecco il changelog."])
+    events = []
+    runner = AgentRunner(Orchestrator(settings, llm=llm), project, PermissionPolicy(mode="ask", root=project))
+    out = "".join(runner.run("come si scrive il changelog?", on_event=events.append))
+    assert out.startswith("Ecco il changelog.")
+    system = llm.calls[0]["messages"][0]["content"]
+    assert "# Skills" in system and "- traduci:" in system
+    tool_result = str(llm.calls[1]["messages"])
+    assert "Raggruppa per Added/Fixed" in tool_result  # letta senza chiedere il permesso
+    assert any(e["type"] == "info" and e["text"] == "skill changelog" for e in events)
+
+
+def test_no_skills_no_tool(project):
+    assert "skill" not in [s["name"] for s in make_tools(project).specs()]
