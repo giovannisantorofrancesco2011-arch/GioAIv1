@@ -41,7 +41,7 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 git clone <questo-repo> mydevagent && cd mydevagent
 ./scripts/install.sh gpu8          # cpu | gpu8 | gpu16 | gpu24     (Windows: scripts\install.ps1 -HwProfile gpu8)
 source .venv/bin/activate
-mydevagent chat
+mydevagent
 ```
 
 ### Manuale
@@ -56,7 +56,7 @@ cp .env.example .env                                      # profilo, chiavi di r
 
 # 3. Verifica e usa
 mydevagent doctor
-mydevagent chat
+mydevagent
 ```
 
 ### Quale profilo?
@@ -67,12 +67,13 @@ mydevagent chat
 | `gpu16` | GPU 12–16 GB | qwen2.5-coder:14b |
 | `gpu24` | GPU 24 GB / Mac 32 GB+ | qwen3-coder:30b (MoE, velocissimo) |
 
-Cambia profilo con `MYDEVAGENT_PROFILE=gpu16` in `.env` o `mydevagent chat -p gpu16`.
+Cambia profilo con `MYDEVAGENT_PROFILE=gpu16` in `.env` o `mydevagent -p gpu16`.
 
 ## Uso
 
 ```bash
-mydevagent chat                                   # chat interattiva (/fast /deep /file /image /think /reset)
+mydevagent                                        # interfaccia interattiva stile Claude Code (vedi docs/TUI.md)
+mydevagent --continue                             # riprende l'ultima sessione di questa cartella
 mydevagent ask "Scrivi un LRU cache thread-safe in Go con test"
 mydevagent ask "Perché crasha?" -f app/main.py -f error.log
 mydevagent ask "/deep API FastAPI per upload su S3 con auth JWT, Postgres e Docker"
@@ -85,6 +86,9 @@ mydevagent index                                  # indicizza il progetto corren
 mydevagent serve                                  # server OpenAI-compatibile su :8000
 ollama run mydevagent                             # modello single-agent (dopo `ollama create`, vedi sotto)
 ```
+
+Nell'interfaccia: `/` per i comandi, `@file` per allegare, `!comando` per la shell, `/apply` per salvare
+i file generati (con diff e conferma), `Ctrl+C` per interrompere. Guida completa: [docs/TUI.md](docs/TUI.md).
 
 Nel messaggio puoi guidare il team: `/fast`, `/balanced`, `/deep`, `@security`, `@perf`, `@web`, `@db`,
 `@fe`, `@be`, `@devops`, `@review`, `@docs`…
@@ -141,6 +145,7 @@ config/settings.yaml      profili hardware, modalità, tool, server
 config/agents.yaml        i 15 agenti (ruolo, tier, budget, sezioni lette, tool, keyword)
 prompts/                  persona di sistema + 15 prompt di ruolo
 mydevagent/               router · grafo LangGraph · orchestratore · client LLM · tool · CLI · server
+mydevagent/tui/           interfaccia da terminale stile Claude Code
 modelfiles/               Modelfile Ollama per profilo (persona integrata)
 deploy/                   Ollama, LM Studio, llama.cpp, vLLM, Docker Compose, SearXNG
 finetune/                 dataset dai tuoi repo, QLoRA con Unsloth, export GGUF → Ollama
@@ -152,9 +157,9 @@ tests/                    test con LLM finto (nessun modello richiesto): `pytest
 ## Sviluppo
 ```bash
 pip install -e ".[dev]"
-pytest            # 40+ test: registry, router, reasoning, tool/sandbox, pipeline, server
+pytest            # 59 test: registry, router, reasoning, tool/sandbox, pipeline, server
 ruff check .
-MYDEVAGENT_FAKE_LLM=1 mydevagent ask "demo"      # prova la pipeline senza modello
+MYDEVAGENT_FAKE_LLM=1 mydevagent                 # prova l'interfaccia senza modello
 ```
 
 Licenza MIT. I modelli hanno le loro licenze (Qwen: Apache-2.0 per la maggior parte delle taglie —

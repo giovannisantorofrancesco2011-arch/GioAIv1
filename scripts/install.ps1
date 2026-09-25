@@ -32,4 +32,4 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 (Get-Content .env) -replace '^MYDEVAGENT_PROFILE=.*', "MYDEVAGENT_PROFILE=$HwProfile" | Set-Content .env
 
 mydevagent doctor
-Write-Host "`nFatto!  .\.venv\Scripts\Activate.ps1 ; mydevagent chat"
+Write-Host "`nFatto!  .\.venv\Scripts\Activate.ps1 ; mydevagent"

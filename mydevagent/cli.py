@@ -1,4 +1,4 @@
-"""CLI: mydevagent chat | ask | serve | index | doctor | agents | route."""
+"""CLI: mydevagent (UI interattiva) | chat | ask | serve | index | doctor | agents | route."""
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-app = typer.Typer(add_completion=False, no_args_is_help=True,
-                  help="MyDevAgent — assistente di programmazione local-first con 15 agenti.")
+app = typer.Typer(add_completion=False,
+                  help="MyDevAgent — assistente di programmazione local-first con 15 agenti. "
+                       "Senza comandi apre l'interfaccia interattiva.")
 console = Console()
 err = Console(stderr=True)
 
@@ -61,6 +62,19 @@ def _images(paths: list[Path] | None) -> list[str]:
     return [image_to_data_url(p) for p in paths or []]
 
 
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
+    continue_last: bool = typer.Option(False, "--continue", "-c", help="Riprendi l'ultima sessione in questa cartella"),
+) -> None:
+    """Senza sottocomando apre l'interfaccia interattiva stile Claude Code."""
+    if ctx.invoked_subcommand is None:
+        from .tui import run_tui
+
+        run_tui(profile, continue_last=continue_last)
+
+
 @app.command()
 def ask(
     request: str = typer.Argument(..., help="La richiesta ('-' per leggere da stdin)"),
@@ -92,8 +106,15 @@ CHAT_HELP = """[bold]Comandi[/bold]: /fast /balanced /deep /auto (modalità) · 
 def chat(
     profile: str = typer.Option(None, "--profile", "-p", help="cpu | gpu8 | gpu16 | gpu24"),
     mode: str = typer.Option("auto", "--mode", "-m"),
+    plain: bool = typer.Option(False, "--plain", help="Chat semplice (terminali limitati, pipe)"),
+    continue_last: bool = typer.Option(False, "--continue", "-c"),
 ) -> None:
-    """Chat interattiva nel terminale."""
+    """Chat interattiva (stessa UI di `mydevagent`; --plain per la versione semplice)."""
+    if not plain and sys.stdin.isatty():
+        from .tui import run_tui
+
+        run_tui(profile, continue_last=continue_last)
+        return
     orch = _orchestrator(profile)
     history: list[dict[str, Any]] = []
     files: dict[str, str] = {}

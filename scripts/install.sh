@@ -56,7 +56,7 @@ cat <<MSG
 
 Fatto! Prossimi passi:
   source .venv/bin/activate
-  mydevagent chat                 # chat nel terminale
+  mydevagent                      # interfaccia interattiva nel terminale
   mydevagent serve                # server OpenAI-compatibile su http://127.0.0.1:8000/v1
   ollama run mydevagent           # modello single-agent diretto
 MSG

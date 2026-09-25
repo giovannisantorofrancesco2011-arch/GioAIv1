@@ -29,10 +29,15 @@ from .tools.web_search import format_results
 EventHandler = Callable[[dict[str, Any]], None]
 
 
+class Cancelled(Exception):
+    """L'utente ha interrotto la richiesta (es. Ctrl+C nella UI)."""
+
+
 class Team:
     def __init__(self, settings: Settings, registry: AgentRegistry, llm: LLM, toolbox: Toolbox,
-                 on_event: EventHandler | None = None) -> None:
+                 on_event: EventHandler | None = None, cancel: threading.Event | None = None) -> None:
         self.settings = settings
+        self.cancel = cancel
         self.registry = registry
         self.llm = llm
         self.toolbox = toolbox
@@ -72,6 +77,8 @@ class Team:
         ]
 
     def run_agent(self, key: str, state: TeamState, *, task: str = "") -> tuple[str, dict[str, Any]]:
+        if self.cancel is not None and self.cancel.is_set():
+            raise Cancelled(key)
         agent = self.registry[key]
         mode = (state.get("route") or {}).get("mode", "balanced")
         think = self.think_for(mode, agent)
@@ -82,7 +89,7 @@ class Team:
         try:
             if use_tools:
                 result: Completion = self.llm.complete_with_tools(
-                    msgs, tools=self.toolbox.schemas(agent.tools), executor=self.toolbox.execute,
+                    msgs, tools=self.toolbox.schemas(agent.tools), executor=self._tool_executor(key),
                     tier=agent.tier, max_tokens=agent.max_tokens, temperature=agent.temperature)
             else:
                 result = self.llm.complete(msgs, tier=agent.tier, max_tokens=agent.max_tokens,
@@ -101,6 +108,18 @@ class Team:
         }
         self.emit({"type": "agent_end", **entry, "name": agent.name})
         return text, entry
+
+    def _tool_executor(self, agent_key: str):
+        """Esegue un tool emettendo eventi (la UI li mostra come ⏺ tool(args) / ⎿ risultato)."""
+
+        def execute(name: str, args: dict[str, Any]) -> str:
+            self.emit({"type": "tool_call", "agent": agent_key, "tool": name, "args": args})
+            result = self.toolbox.execute(name, args)
+            self.emit({"type": "tool_result", "agent": agent_key, "tool": name,
+                       "ok": not result.startswith("ERROR"), "preview": result[:200]})
+            return result
+
+        return execute
 
     # ------------------------------------------------------------------ nodes
     def research_node(self, state: TeamState) -> dict[str, Any]:
@@ -121,7 +140,7 @@ class Team:
         raw = format_results(response)
         pages = []
         for i, r in enumerate(response.results[: self.settings.tools.web.fetch_top_n], start=1):
-            page = self.toolbox.execute("web_fetch", {"url": r.url})
+            page = self._tool_executor("research")("web_fetch", {"url": r.url})
             if not page.startswith("ERROR"):
                 pages.append(f"[{i}] extract from {r.url}:\n{truncate(page, self.settings.tools.web.max_page_chars)}")
         interim: TeamState = {**state, "research": raw + ("\n\n" + "\n\n".join(pages) if pages else "")}

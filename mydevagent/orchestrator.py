@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
 from .config import Settings, get_settings
-from .graph import EventHandler, Team
+from .graph import Cancelled, EventHandler, Team
 from .llm import LLM, build_llm
 from .reasoning import ThinkFilter
 from .registry import AgentRegistry, load_registry
@@ -77,8 +78,12 @@ class Orchestrator:
         mode: str | None = None,
         on_event: EventHandler | None = None,
         show_thinking: bool = False,
+        cancel: threading.Event | None = None,
     ) -> Iterator[str]:
-        """Esegue la richiesta e restituisce la risposta finale in streaming (chunk di testo)."""
+        """Esegue la richiesta e restituisce la risposta finale in streaming (chunk di testo).
+
+        `cancel` (threading.Event) interrompe il lavoro: prima del prossimo agente o al prossimo chunk.
+        """
         info = RunInfo()
         self.last_run = info
         route = self.route(request, mode=mode, has_images=bool(images))
@@ -86,7 +91,7 @@ class Orchestrator:
         emit = on_event or (lambda _e: None)
         emit({"type": "route", "mode": route.mode, "agents": route.agents, "reasons": route.reasons})
 
-        team = Team(self.settings, self.registry, self.llm, self.toolbox, on_event=on_event)
+        team = Team(self.settings, self.registry, self.llm, self.toolbox, on_event=on_event, cancel=cancel)
         state = self._initial_state(route, history or [], files or {}, images or [], emit)
 
         if route.mode == "fast":
@@ -101,7 +106,11 @@ class Orchestrator:
             tier, max_tokens, temperature = agent.tier, max(agent.max_tokens, 1500), agent.temperature
             emit({"type": "agent_start", "agent": agent.key, "name": agent.name})
         else:
-            final_state = team.build().invoke(state, {"recursion_limit": 60})
+            try:
+                final_state = team.build().invoke(state, {"recursion_limit": 60})
+            except Cancelled:
+                emit({"type": "cancelled"})
+                return
             info.trace = list(final_state.get("trace", []))
             info.test_report = final_state.get("test_report", "")
             info.artifacts = dict(final_state.get("artifacts", {}))
@@ -113,7 +122,14 @@ class Orchestrator:
         think_filter = ThinkFilter(show=show_thinking)
         final_start = time.perf_counter()
         chars = 0
-        for chunk in self.llm.stream(msgs, tier=tier, max_tokens=max_tokens, temperature=temperature):
+        stream = self.llm.stream(msgs, tier=tier, max_tokens=max_tokens, temperature=temperature)
+        for chunk in stream:
+            if cancel is not None and cancel.is_set():
+                close = getattr(stream, "close", None)
+                if close:
+                    close()  # chiude la connessione: il modello smette di generare
+                emit({"type": "cancelled"})
+                return
             out = think_filter.feed(chunk)
             if out:
                 chars += len(out)
