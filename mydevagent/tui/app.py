@@ -28,7 +28,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
-from .. import health
+from .. import health, plugins
 from ..agent import CheckpointStore, PermissionPolicy
 from ..agent.context import append_memory, read_memory
 from ..agent.permissions import MODE_LABELS, ApprovalRequest
@@ -75,6 +75,7 @@ COMMANDS = {
     "/theme": "tema dark / light",
     "/vio": "saluta Vio, la mascotte (e accarezzala)",
     "/skill": "skill disponibili · /skill <nome> [richiesta] per usarne una",
+    "/plugin": "plugin (formato Claude Code) · /plugin install <utente/repo> · update · remove",
     "/resume": "riprendi una sessione precedente in questa cartella",
     "/export": "salva la conversazione in Markdown",
     "/clear": "nuova conversazione",
@@ -315,6 +316,9 @@ class TuiApp:
         skills = load_skills(self.root)
         skill_line = (f"{len(skills)} caricate · /skill per vederle" if skills
                       else "nessuna (.mydevagent/skills/<nome>/SKILL.md)")
+        found = plugins.load_plugins(self.root)
+        plugin_line = (f"{len(found)} attivi · /plugin per vederli" if found
+                       else "nessuno (/plugin install <utente/repo>)")
         tiers = " · ".join(f"{t} {settings.resolve_model(t)[0]}" for t in ("fast", "reasoning"))
         body = (
             f"[bold {ACCENT}]✻[/] [bold]Benvenuto in MyDevAgent[/]  [dim]v{__version__} · "
@@ -323,7 +327,8 @@ class TuiApp:
             f"[dim]profilo:[/]  {settings.profile} · [dim]modello:[/] {escape(self.model)} [dim]· {escape(tiers)}[/]\n"
             f"[dim]hardware:[/] {self._hardware}\n"
             f"[dim]memoria:[/]  {memory}\n"
-            f"[dim]skill:[/]    {skill_line}\n\n"
+            f"[dim]skill:[/]    {skill_line}\n"
+            f"[dim]plugin:[/]   {plugin_line}\n\n"
             "[dim]Suggerimenti:[/]\n"
             f"  [{ACCENT}]•[/] chiedi di modificare il codice: l'agente legge, modifica, lancia i test e ti mostra i diff\n"
             f"  [{ACCENT}]•[/] [bold]/[/] comandi · [bold]@file[/] allega · [bold]![/]shell · [bold]#[/]nota in memoria\n"
@@ -384,6 +389,8 @@ class TuiApp:
         """Esegue un comando `/`. Restituisce False per uscire."""
         cmd, _, arg = text.partition(" ")
         cmd, arg = cmd.lower(), arg.strip()
+        if ":" in cmd and cmd not in self.custom:  # /plugin:comando, come in Claude Code
+            cmd = "/" + cmd.rsplit(":", 1)[1]
         c = self.console
         if cmd in ("/exit", "/quit"):
             return False
@@ -503,6 +510,8 @@ class TuiApp:
             doctor(profile=None)
         elif cmd in ("/skill", "/skills"):
             self._skill(arg)
+        elif cmd in ("/plugin", "/plugins"):
+            self._plugin(arg)
         elif cmd == "/vio":
             self._pats = getattr(self, "_pats", 0) + 1
             self.say(mascot.PATS[(self._pats - 1) % len(mascot.PATS)], "love")
@@ -536,9 +545,10 @@ class TuiApp:
                 self.console.print("[dim]⎿  Nessuna skill. Creane una in .mydevagent/skills/<nome>/SKILL.md "
                                    "(guida: docs/TUI.md)[/]")
                 return
-            table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
-            for col in ("skill", "da", "descrizione"):
-                table.add_column(col)
+            table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2), expand=True)
+            for col in ("skill", "da"):
+                table.add_column(col, no_wrap=True)
+            table.add_column("descrizione", no_wrap=True, overflow="ellipsis", ratio=1)
             for skill in skills.values():
                 table.add_row(f"[{ACCENT}]{escape(skill.name)}[/]", skill.source, escape(skill.description))
             self.console.print(table)
@@ -553,6 +563,64 @@ class TuiApp:
         self.say(f"Uso la skill {skill.name}.", "think")
         self.submit(f"Follow the skill `{skill.name}` for this request.\n\n{skill.read()}\n\n# Request\n{task}",
                     display=f"/skill {arg}")
+
+    def _plugin(self, arg: str) -> None:
+        c = self.console
+        action, _, target = arg.partition(" ")
+        action, target = action.lower(), target.strip()
+        found = plugins.load_plugins(self.root)
+        if action in ("install", "update", "remove") and target:
+            if action == "install":
+                c.print(f"[dim]⎿  Installo {escape(target)}…[/]")
+            try:
+                if action == "install":
+                    done = [f"Installato [bold]{escape(p.name)}[/] [dim]{self._plugin_summary(p)}[/]"
+                            for p in plugins.install(target)]
+                elif action == "update":
+                    done = [f"Aggiornato [bold]{escape(target)}[/] [dim]{escape(plugins.update(target, self.root))}[/]"]
+                else:
+                    folder = plugins.remove(target, self.root)
+                    done = [f"Rimosso [bold]{escape(target)}[/] [dim](cartella {escape(str(folder))})[/]"]
+            except (ValueError, OSError) as exc:
+                c.print(f"[red]⎿  {escape(str(exc))}[/]")
+                return
+            self.custom = extras.custom_commands(self.root)
+            self.completer.commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
+            for line in done:
+                c.print(f"[green]⏺[/] {line}", highlight=False)
+            if action == "install":
+                self.say("Nuovo plugin! Trovi i comandi con /, le skill con /skill.", "love")
+            return
+        if action not in ("", "list"):
+            c.print("[red]⎿  uso: /plugin [list] · install <utente/repo | url git | cartella> · update <nome> · "
+                    "remove <nome>[/]", highlight=False)
+            return
+        if not found:
+            c.print("[dim]⎿  Nessun plugin. Installane uno con /plugin install <utente/repo | url git | cartella>, "
+                    "anche quelli di Claude Code (guida: docs/TUI.md)[/]", highlight=False)
+            return
+        table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2), expand=True)
+        for col in ("plugin", "da", "contenuto"):
+            table.add_column(col, no_wrap=True)
+        table.add_column("descrizione", no_wrap=True, overflow="ellipsis", ratio=1)  # una riga per plugin
+        for p in found.values():
+            folder = plugins.folder_of(p)
+            source = p.source + (f" · {folder.name}" if folder and folder.name != p.name else "")
+            table.add_row(f"[{ACCENT}]{escape(p.name)}[/]", escape(source), self._plugin_summary(p),
+                          escape(p.description))
+        c.print(table)
+        partial = [f"{p.name} ({', '.join(p.unsupported())})" for p in found.values() if p.unsupported()]
+        if partial:
+            c.print(f"[dim]Non ancora supportati: {escape('; '.join(partial))}. Il resto funziona.[/]",
+                    highlight=False)
+        c.print("[dim]/plugin install <utente/repo | url | cartella> · /plugin update <nome> · "
+                "/plugin remove <nome>[/]", highlight=False)
+
+    @staticmethod
+    def _plugin_summary(plugin: plugins.Plugin) -> str:
+        names = (("commands", "comando", "comandi"), ("skills", "skill", "skill"), ("agents", "agente", "agenti"))
+        parts = [f"{n} {one if n == 1 else many}" for kind, one, many in names if (n := plugin.count(kind))]
+        return " · ".join(parts) or "solo hook o MCP"
 
     def _rewind(self) -> None:
         checkpoints = self.checkpoints.list()

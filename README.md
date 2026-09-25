@@ -65,6 +65,7 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 | Ricerca semantica sul codice (RAG), indicizzata in background | Cursor | automatica, `/index` |
 | Comandi personalizzati in `.mydevagent/commands/*.md` | Claude Code | `/nome` |
 | Skill in cartelle (`SKILL.md` + file di supporto), caricate solo quando servono | Claude Code, BluAgent | `/skill` |
+| Plugin nel formato di Claude Code (comandi, skill, agenti), anche quelli già installati in Claude Code | Claude Code | `/plugin` |
 | Compattazione della conversazione | Claude Code | `/compact`, automatica |
 | Team multi-agente con review sul diff reale e dibattito sul piano | MyDevAgent | `/balanced` `/deep` `/ultra-deep` |
 

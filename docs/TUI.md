@@ -86,6 +86,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/model <nome>` · `/models` | cambia modello per la sessione (`--save` lo ricorda nel `.env`) · modelli installati e in uso |
 | `/pull <nome>` | scarica un modello da Ollama con barra di avanzamento |
 | `/skill` · `/skill <nome> <richiesta>` | skill disponibili · usa una skill per questa richiesta |
+| `/plugin` · `/plugin install <utente/repo>` · `update` · `remove` | plugin nel formato di Claude Code |
 | `/vio` | saluta (e accarezza) Vio, la mascotte |
 | `/agents` | i 35 agenti (nucleo e ultra) |
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
@@ -102,8 +103,9 @@ riga `- test: <comando>`, l'agente usa quel comando per i test.
 
 ## Comandi personalizzati
 Crea `.mydevagent/commands/<nome>.md` (nel progetto) o `~/.mydevagent/commands/<nome>.md` (per tutti i
-progetti). `$ARGUMENTS` viene sostituito con il testo dopo il comando; la prima riga `description:` compare
-nel completamento.
+progetti); valgono anche quelli di Claude Code in `.claude/commands/` e `~/.claude/commands/`.
+`$ARGUMENTS` viene sostituito con il testo dopo il comando, `$1`, `$2`… con le singole parole; la
+`description:` (nel frontmatter o sulla prima riga) compare nel completamento.
 
 ```markdown
 description: scrive i test mancanti per un file
@@ -133,6 +135,28 @@ in `MYDEVAGENT_SKILLS_DIRS` nel `.env`, separate da `;` su Windows, per esempio 
 `MYDEVAGENT_SKILLS_DIRS=C:\Users\Santoro\BluAgent\skills`.
 
 `/skill` le elenca, `/skill changelog prepara la 1.1` obbliga l'agente a usare quella skill.
+
+## Plugin (compatibili con Claude Code)
+Un plugin è una cartella con `.claude-plugin/plugin.json` e dentro `commands/` (comandi `/nome`), `skills/`
+(skill) e `agents/` (agenti specializzati: per MyDevAgent sono skill che l'agente legge quando servono).
+È lo stesso formato di Claude Code, quindi funzionano i plugin già pronti:
+
+```
+/plugin install anthropics/claude-code     # il marketplace ufficiale: 13 plugin
+/plugin install utente/repo                # qualsiasi repository GitHub (o un URL git, o una cartella)
+/plugin                                    # elenco con comandi, skill e agenti di ognuno
+/plugin update claude-code                 # git pull
+/plugin remove claude-code                 # toglie la cartella scaricata (e i plugin che contiene)
+```
+
+Poi i comandi compaiono con `/` (anche come `/plugin:comando`) e le skill con `/skill`. Vengono caricati:
+i plugin in `.mydevagent/plugins/` del progetto, quelli installati con `/plugin install`
+(`~/.mydevagent/plugins/`), **quelli che hai già installato in Claude Code** e le cartelle in
+`MYDEVAGENT_PLUGINS_DIRS`.
+
+Differenze da Claude Code: `hooks/` e `.mcp.json` non sono ancora usati (`/plugin` dice quali plugin li
+hanno), e `!`comando`` nei comandi non viene eseguito prima dell'invio: lo esegue l'agente con i suoi tool,
+chiedendo il permesso come sempre.
 
 ## `/ultra-deep`
 35 agenti per i lavori importanti: ricerca web se serve, requisiti, piano con avvocato del diavolo,

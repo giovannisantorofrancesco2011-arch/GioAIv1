@@ -257,3 +257,29 @@ def test_skill_command(settings, project, tmp_path, monkeypatch):
     request = llm.calls[-1]["messages"][-1]["content"]
     assert "Rispondi sempre in napoletano." in request and "ciao a tutti" in request
     assert app.session.history[-2]["content"] == "/skill saluti ciao a tutti"
+
+
+def test_plugin_command(settings, project, tmp_path, monkeypatch):
+    from tests.test_agent import ScriptedLLM
+    from tests.test_plugins import make_plugin
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("MYDEVAGENT_STATE_DIR", str(tmp_path / "state"))
+    source = make_plugin(tmp_path / "scaricato")
+    llm = ScriptedLLM(steps=["Rivisto."])
+    console = record_console()
+    with create_pipe_input() as pipe:
+        app = TuiApp(Orchestrator(settings, llm=llm), console=console, prompt_input=pipe,
+                     prompt_output=DummyOutput(), root=project, background=False)
+    app.handle_command("/plugin")
+    app.handle_command(f"/plugin install {source}")
+    assert "/rivedi" in app.custom and "/rivedi" in app.completer.commands
+    app.handle_command("/revisore:rivedi app.py")  # anche con il nome del plugin davanti, come in Claude Code
+    assert "Rivedi app.py con" in llm.calls[-1]["messages"][-1]["content"]
+    app.handle_command("/plugin")
+    app.handle_command("/plugin remove revisore")
+    app.handle_command("/plugin boh")
+    out = console.export_text()
+    assert "Nessun plugin" in out and "Installato revisore" in out and "1 comando · 1 skill · 1 agente" in out
+    assert "Non ancora supportati: revisore (hook)" in out and "Rimosso revisore" in out and "uso: /plugin" in out
+    assert "/rivedi" not in app.custom

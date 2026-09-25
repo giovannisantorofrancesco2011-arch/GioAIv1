@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
+from ..plugins import load_plugins
+from ..skills import split_frontmatter
 
 COMPACT_PROMPT = (
     "Summarize this conversation between a user and a coding agent so work can continue. Keep: the user's "
@@ -31,30 +35,41 @@ INIT_TASK = (
 
 # ------------------------------------------------------------ comandi custom
 def custom_commands(root: Path) -> dict[str, tuple[str, str]]:
-    """`.mydevagent/commands/<nome>.md` (progetto) e `~/.mydevagent/commands` (utente) → /nome.
+    """Comandi `/nome` da file Markdown, nel formato di Claude Code.
 
-    Nel file `$ARGUMENTS` viene sostituito con il testo dopo il comando. La prima riga che inizia
-    con `description:` diventa la descrizione mostrata nel completamento.
+    Da dove, il più specifico vince: `.mydevagent/commands` e `.claude/commands` del progetto,
+    `~/.mydevagent/commands`, `~/.claude/commands` e i `commands/` dei plugin. `description:` (nel
+    frontmatter o sulla prima riga) è la descrizione del completamento; `$ARGUMENTS`, `$1`, `$2`… vengono
+    sostituiti con il testo dopo il comando e `${CLAUDE_PLUGIN_ROOT}` con la cartella del plugin.
+    `!`comando`` diventa un'istruzione per l'agente, che lo esegue con i suoi tool e i soliti permessi.
     """
     state = Path(os.environ.get("MYDEVAGENT_STATE_DIR", Path.home() / ".mydevagent"))
+    sources = [(d, f" (plugin {p.name})", p.path) for p in load_plugins(root).values() for d in p.dirs("commands")]
+    sources += [(d, "", None) for d in (Path.home() / ".claude" / "commands", state / "commands",
+                                         root / ".claude" / "commands", root / ".mydevagent" / "commands")]
     out: dict[str, tuple[str, str]] = {}
-    for folder in (state / "commands", root / ".mydevagent" / "commands"):
+    for folder, suffix, plugin_root in sources:
         if not folder.is_dir():
             continue
-        for path in sorted(folder.glob("*.md")):
-            text = path.read_text(encoding="utf-8", errors="replace")
-            desc = "comando personalizzato"
-            lines = text.splitlines()
-            if lines and lines[0].lower().startswith("description:"):
-                desc = lines[0].split(":", 1)[1].strip()
-                text = "\n".join(lines[1:]).strip()
-            out["/" + path.stem.lower()] = (desc, text)
+        for path in sorted(folder.rglob("*.md")):
+            meta, text = split_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
+            lines = text.strip().splitlines()
+            if not meta and lines and lines[0].lower().startswith("description:"):
+                meta, text = {"description": lines[0].split(":", 1)[1].strip()}, "\n".join(lines[1:])
+            if plugin_root:
+                text = text.replace("${CLAUDE_PLUGIN_ROOT}", str(plugin_root))
+            # ponytail: Claude Code esegue !`comando` prima di inviare; qui lo esegue l'agente, con i permessi
+            text = re.sub(r"!`([^`\n]+)`", r"(run `\1` with your tools and use its output)", text)
+            out["/" + path.stem.lower()] = ((meta.get("description") or "comando personalizzato") + suffix,
+                                            text.strip())
     return out
 
 
 def expand_command(template: str, arguments: str) -> str:
-    if "$ARGUMENTS" in template:
-        return template.replace("$ARGUMENTS", arguments)
+    words = arguments.split()
+    text = re.sub(r"\$(\d)", lambda m: words[int(m[1]) - 1] if 0 < int(m[1]) <= len(words) else "", template)
+    if "$ARGUMENTS" in template or text != template:
+        return text.replace("$ARGUMENTS", arguments)
     return f"{template}\n\n{arguments}".strip()
 
 

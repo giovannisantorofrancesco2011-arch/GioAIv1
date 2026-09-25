@@ -11,7 +11,8 @@ un singolo file `<nome>.md`. In testa al file, opzionale:
 All'agente arriva solo l'elenco nome + descrizione; il contenuto lo legge con il tool `skill` quando una
 richiesta corrisponde. Cartelle lette, dalla più specifica: `.mydevagent/skills` e `.claude/skills` del
 progetto, `~/.mydevagent/skills`, `~/.claude/skills`, più quelle in MYDEVAGENT_SKILLS_DIRS (separate da `;`
-su Windows e `:` altrove), per esempio la cartella delle skill di un altro agente.
+su Windows e `:` altrove), per esempio la cartella delle skill di un altro agente. Poi le skill e gli
+agenti dei plugin (vedi plugins.py).
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+from .plugins import load_plugins
 
 SKILL_FILES = ("SKILL.md", "skill.md", "Skill.md")
 MAX_SKILL_CHARS = 12_000
@@ -39,7 +42,7 @@ class Skill:
         return self.path.parent if self.path.name in SKILL_FILES else None
 
     def body(self) -> str:
-        return _split(self.path.read_text(encoding="utf-8", errors="replace"))[1].strip()[:MAX_SKILL_CHARS]
+        return split_frontmatter(self.path.read_text(encoding="utf-8", errors="replace"))[1].strip()[:MAX_SKILL_CHARS]
 
     def files(self) -> list[str]:
         if not self.folder:
@@ -62,7 +65,7 @@ class Skill:
         return target.read_text(encoding="utf-8", errors="replace")[:MAX_SKILL_CHARS]
 
 
-def _split(text: str) -> tuple[dict[str, str], str]:
+def split_frontmatter(text: str) -> tuple[dict[str, str], str]:
     """Frontmatter semplice `chiave: valore` → (metadati, corpo)."""
     match = FRONTMATTER_RE.match(text)
     if not match:
@@ -88,6 +91,8 @@ def skill_dirs(root: Path) -> list[tuple[Path, str]]:
     state = Path(os.environ.get("MYDEVAGENT_STATE_DIR", home / ".mydevagent"))
     dirs = [(root / ".mydevagent" / "skills", "progetto"), (root / ".claude" / "skills", "progetto"),
             (state / "skills", "utente"), (home / ".claude" / "skills", "utente")]
+    for plugin in load_plugins(root).values():  # skill e agenti dei plugin (formato Claude Code)
+        dirs += [(d, f"plugin {plugin.name}") for kind in ("skills", "agents") for d in plugin.dirs(kind)]
     for raw in os.environ.get("MYDEVAGENT_SKILLS_DIRS", "").split(os.pathsep):
         if raw.strip():
             dirs.append((Path(raw.strip()).expanduser(), "extra"))
@@ -107,7 +112,7 @@ def load_skills(root: Path) -> dict[str, Skill]:
             if path is None:
                 continue
             try:
-                meta, body = _split(path.read_text(encoding="utf-8", errors="replace"))
+                meta, body = split_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
             except OSError:
                 continue
             default = path.parent.name if path.name in SKILL_FILES else path.stem
@@ -121,6 +126,12 @@ def load_skills(root: Path) -> dict[str, Skill]:
 def skills_prompt(skills: dict[str, Skill]) -> str:
     if not skills:
         return ""
-    lines = "\n".join(f"- {s.name}: {s.description}" for s in skills.values())
+    lines = "\n".join(f"- {s.name}: {_short(s.description)}" for s in skills.values())
     return ("# Skills\nThese skills contain expert instructions. When the request matches a skill, FIRST call "
             "the `skill` tool with its name, then follow its instructions.\n" + lines)
+
+
+def _short(text: str, limit: int = 160) -> str:
+    """Nel prompt basta l'inizio: con tanti plugin l'elenco resta piccolo anche per i modelli locali."""
+    text = re.split(r"\s*(?:<example>|Examples?:)", text)[0]
+    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + "…"
