@@ -9,8 +9,9 @@ import yaml
 
 from .config import Settings
 
-EXPECTED_AGENT_COUNT = 15
-STAGES = ("research", "plan", "specialist", "test", "gate", "docs", "final")
+EXPECTED_AGENT_COUNT = 15  # nucleo: fast / balanced / deep
+EXPECTED_ULTRA_COUNT = 20  # estesi: solo /ultra-deep (totale 35)
+STAGES = ("research", "plan", "specialist", "test", "gate", "docs", "final", "judge")
 SECTIONS = (
     "request",
     "history",
@@ -41,6 +42,7 @@ class Agent:
     tools: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
+    group: str = "core"  # core | ultra
 
 
 @dataclass
@@ -67,18 +69,20 @@ class AgentRegistry:
     def by_stage(self, stage: str) -> list[Agent]:
         return [a for a in self if a.stage == stage]
 
+    def core(self) -> list[Agent]:
+        return [a for a in self if a.group == "core"]
+
+    def ultra(self) -> list[Agent]:
+        return [a for a in self if a.group == "ultra"]
+
     def resolve(self, name: str) -> str | None:
         """Alias o chiave → chiave agente (None se sconosciuto)."""
         return self.by_alias.get(name.lower().lstrip("@"))
 
 
-def load_registry(settings: Settings, *, strict: bool = True) -> AgentRegistry:
-    agents_file = Path(settings.config_dir) / "agents.yaml"
-    data = yaml.safe_load(agents_file.read_text(encoding="utf-8")) or {}
-    prompts_dir = Path(settings.prompts_dir)
-    persona = (prompts_dir / "system_persona.md").read_text(encoding="utf-8").strip()
-
-    agents: dict[str, Agent] = {}
+def _load_agents(path: Path, prompts_dir: Path, group: str) -> list[Agent]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    agents = []
     for raw in data.get("agents", []):
         prompt_path = prompts_dir / "agents" / raw["prompt"]
         if not prompt_path.is_file():
@@ -98,20 +102,42 @@ def load_registry(settings: Settings, *, strict: bool = True) -> AgentRegistry:
             tools=tuple(raw.get("tools", [])),
             keywords=tuple(str(k).lower() for k in raw.get("keywords", [])),
             aliases=tuple(str(a).lower() for a in raw.get("aliases", [])),
+            group=group,
         )
         _validate(agent)
+        agents.append(agent)
+    return agents
+
+
+def load_registry(settings: Settings, *, strict: bool = True) -> AgentRegistry:
+    config_dir = Path(settings.config_dir)
+    prompts_dir = Path(settings.prompts_dir)
+    persona = (prompts_dir / "system_persona.md").read_text(encoding="utf-8").strip()
+
+    core = _load_agents(config_dir / "agents.yaml", prompts_dir, "core")
+    ultra_file = config_dir / "agents_ultra.yaml"
+    ultra = _load_agents(ultra_file, prompts_dir, "ultra") if ultra_file.is_file() else []
+    agents: dict[str, Agent] = {}
+    for agent in core + ultra:
         if agent.key in agents:
             raise ValueError(f"Chiave agente duplicata: {agent.key}")
         agents[agent.key] = agent
 
     if strict:
-        if len(agents) != EXPECTED_AGENT_COUNT:
-            raise ValueError(f"MyDevAgent richiede esattamente {EXPECTED_AGENT_COUNT} agenti, trovati {len(agents)}")
+        if len(core) != EXPECTED_AGENT_COUNT:
+            raise ValueError(f"MyDevAgent richiede esattamente {EXPECTED_AGENT_COUNT} agenti nel nucleo, "
+                             f"trovati {len(core)}")
         for stage in ("plan", "specialist", "test", "gate", "final"):
-            if not any(a.stage == stage for a in agents.values()):
+            if not any(a.stage == stage for a in core):
                 raise ValueError(f"Nessun agente con stage '{stage}'")
-        if sorted(a.id for a in agents.values()) != list(range(1, EXPECTED_AGENT_COUNT + 1)):
-            raise ValueError("Gli id degli agenti devono essere 1..15 senza buchi")
+        if sorted(a.id for a in core) != list(range(1, EXPECTED_AGENT_COUNT + 1)):
+            raise ValueError("Gli id degli agenti del nucleo devono essere 1..15 senza buchi")
+        if ultra:
+            total = EXPECTED_AGENT_COUNT + EXPECTED_ULTRA_COUNT
+            if len(ultra) != EXPECTED_ULTRA_COUNT or sorted(a.id for a in ultra) != list(
+                    range(EXPECTED_AGENT_COUNT + 1, total + 1)):
+                raise ValueError(f"agents_ultra.yaml deve contenere esattamente {EXPECTED_ULTRA_COUNT} agenti "
+                                 f"con id 16..{total}")
     return AgentRegistry(agents=agents, persona=persona)
 
 

@@ -98,3 +98,41 @@ elencate nel suo `reads`. Questo taglia i token del 50–80% rispetto alle chat 
 | `@docs` | aggiunge la documentazione |
 
 `mydevagent route "la tua richiesta"` mostra la decisione del router senza chiamare il modello.
+
+## Modalità agente: come lavorano sui file
+Nell'interfaccia (`mydevagent`) il team non si limita a rispondere: **modifica il progetto**.
+
+```
+fast      specialista scelto dal router ── ciclo di tool: leggi → modifica → test → risposta
+balanced  1 Architetto (piano) → specialista in ciclo di tool → 12 Reviewer sul DIFF REALE → correzioni (1 giro)
+deep      come balanced + 9 Security, 10 Performance, 14 Edge Cases sul diff (2 giri)
+```
+- Il ciclo (`mydevagent/agent/loop.py`) usa il function calling nativo con i modelli che lo reggono
+  (`native_tools: true` nel profilo) e un protocollo testuale `<tool name="…">{json}</tool>` con i 7B,
+  con un esempio nel prompt e un richiamo automatico se il modello incolla codice invece di usare i tool.
+- L'agente riceve **memoria del progetto** (`MYDEVAGENT.md`), **repo map** (file + classi/funzioni),
+  pezzi di codice dalla ricerca semantica e il piano dell'Architetto.
+- I quality gate ricevono il **diff reale** e l'esito dei **test eseguiti davvero**; se trovano
+  BLOCKER/MAJOR l'agente corregge nella stessa conversazione.
+
+## `/ultra-deep`: i 35 agenti
+I 20 agenti estesi sono in [`config/agents_ultra.yaml`](../config/agents_ultra.yaml) e
+[`prompts/agents/16_…md` – `35_…md`](../prompts/agents). La pipeline è in [`mydevagent/ultra.py`](../mydevagent/ultra.py):
+
+| Fase | Agenti |
+|---|---|
+| 1 · Ricerca (solo se serve, decide il modello `fast`; offline viene segnalata) | 11 Research |
+| 2 · Requisiti e piano con dibattito | 16 Analista → 1 Architetto → 34 Avvocato del diavolo → 1 (revisione se ADJUST/REPLACE) |
+| 3 · Strategia di test | 29 Test Strategist |
+| 4 · Implementazione | specialisti pertinenti (nucleo + estesi) — agente sui file, o artefatti in modalità chat |
+| 5 · Test | esecuzione reale + 4 Debug & Test |
+| 6 · Mega quality gate in parallelo | 9 Security · 10 Performance · 12 Reviewer · 14 Edge · 24 A11y/i18n · 26 Osservabilità · 30 Threat model · 31 Scalabilità · 33 Fact-checker (web) · 27 Dipendenze (web) |
+| 6b · Lens review brevi (~180 token) | tutti gli specialisti non usati: 2 3 5 6 7 8 17 18 19 20 21 22 23 25 28 — possono dire "non pertinente" |
+| 7 · Integrazione | 35 Integratore capo: unisce, scarta falsi positivi, decide SHIP / FIX → torna alla fase 5 (max 3 giri) |
+| 8 · Docs e rilascio | 13 Documentation + 32 Release (applicati ai file se il progetto ha README/CHANGELOG) |
+| 9 · Consegna | 15 Formatter |
+
+Il Fact-checker e l'agente Dipendenze ricevono ricerche web mirate sulle librerie importate nel codice
+modificato (se sei online). Tutti i 35 agenti partecipano; il riepilogo finale mostra quanti hanno
+lavorato (`ultra-deep · 35 agenti · …`). Il router non attiva mai `/ultra-deep` da solo: per richieste
+molto grandi lo **suggerisce**.

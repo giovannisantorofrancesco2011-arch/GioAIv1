@@ -89,7 +89,8 @@ class Orchestrator:
         route = self.route(request, mode=mode, has_images=bool(images))
         info.route = route
         emit = on_event or (lambda _e: None)
-        emit({"type": "route", "mode": route.mode, "agents": route.agents, "reasons": route.reasons})
+        emit({"type": "route", "mode": route.mode, "agents": route.agents, "reasons": route.reasons,
+              "suggest_ultra": route.suggest_ultra})
 
         team = Team(self.settings, self.registry, self.llm, self.toolbox, on_event=on_event, cancel=cancel)
         state = self._initial_state(route, history or [], files or {}, images or [], emit)
@@ -107,7 +108,14 @@ class Orchestrator:
             emit({"type": "agent_start", "agent": agent.key, "name": agent.name})
         else:
             try:
-                final_state = team.build().invoke(state, {"recursion_limit": 60})
+                if route.mode == "ultra-deep":
+                    from .ultra import ChatImplementer, UltraPipeline
+
+                    web = self.toolbox.ctx.web
+                    pipeline = UltraPipeline(team, route, ChatImplementer(team, state), online=web.enabled(), web=web)
+                    final_state = pipeline.run(state)
+                else:
+                    final_state = team.build().invoke(state, {"recursion_limit": 60})
             except Cancelled:
                 emit({"type": "cancelled"})
                 return

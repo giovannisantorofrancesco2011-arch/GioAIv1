@@ -1,0 +1,285 @@
+# =====================================================================
+#  I 20 agenti estesi (16-35): usati solo in /ultra-deep (o se li menzioni con @alias)
+#  Stessi campi di agents.yaml. Stage aggiuntivo: judge (Integratore capo).
+# =====================================================================
+
+agents:
+  - id: 16
+    key: requirements
+    name: "Analista dei requisiti"
+    stage: plan
+    role: "Trasforma la richiesta in requisiti chiari: user story, criteri di accettazione, casi d'uso, vincoli, cosa è fuori scope."
+    goal: "Eliminare ambiguità prima del design."
+    prompt: 16_requirements.md
+    tier: reasoning
+    max_tokens: 700
+    temperature: 0.2
+    reads: [request, history, files, rag, research, image_notes]
+    keywords: [requisiti, requirements, user story, specifica, specification, casi d'uso, use case, mvp]
+    aliases: [req, requirements]
+
+  - id: 17
+    key: api_design
+    name: "API Designer"
+    stage: specialist
+    role: "Contratti API: OpenAPI/GraphQL schema, naming, versioning, paginazione, errori, idempotenza, compatibilità."
+    goal: "API coerenti, evolvibili e facili da usare."
+    prompt: 17_api_design.md
+    tier: main
+    max_tokens: 1200
+    temperature: 0.1
+    reads: [request, history, files, rag, plan, research, issues]
+    keywords: [openapi, swagger, contratto, contract, versioning, api design, graphql schema, rest design, endpoint design]
+    aliases: [apidesign, openapi]
+
+  - id: 18
+    key: mobile
+    name: "Mobile"
+    stage: specialist
+    role: "App mobile: React Native/Expo, Flutter, Swift/SwiftUI, Kotlin/Jetpack Compose, offline, permessi, store."
+    goal: "App mobili fluide, native nel comportamento e pronte per gli store."
+    prompt: 18_mobile.md
+    tier: main
+    max_tokens: 1400
+    temperature: 0.2
+    reads: [request, history, files, rag, plan, research, issues, image_notes]
+    keywords: [mobile, ios, android, react native, expo, flutter, swiftui, jetpack, kotlin app, app store, play store]
+    aliases: [mobile, ios, android]
+
+  - id: 19
+    key: cloud
+    name: "Cloud Architect"
+    stage: specialist
+    role: "Architettura cloud: AWS/GCP/Azure, serverless, networking, IAM, storage, costi, alta disponibilità."
+    goal: "Infrastruttura sicura, affidabile e con costi sotto controllo."
+    prompt: 19_cloud.md
+    tier: main
+    max_tokens: 1200
+    temperature: 0.1
+    reads: [request, history, files, rag, plan, research, issues]
+    keywords: [aws, gcp, azure, lambda, serverless, s3, iam, vpc, cloud run, cloudformation, cdk, costi cloud, cloud cost]
+    aliases: [cloud, aws]
+
+  - id: 20
+    key: data
+    name: "Data Engineer"
+    stage: specialist
+    role: "Pipeline dati: ETL/ELT, batch e streaming, Spark, dbt, Airflow, Kafka, qualità e schemi dei dati."
+    goal: "Dati corretti, idempotenti e tracciabili lungo tutta la pipeline."
+    prompt: 20_data.md
+    tier: main
+    max_tokens: 1200
+    temperature: 0.1
+    reads: [request, history, files, rag, plan, research, issues]
+    keywords: [etl, elt, pipeline dati, data pipeline, spark, dbt, airflow, kafka, streaming, pandas, polars, data warehouse, bigquery]
+    aliases: [data, etl]
+
+  - id: 21
+    key: ai_ml
+    name: "AI/ML Engineer"
+    stage: specialist
+    role: "Integrazione di modelli: LLM, RAG, embeddings, fine-tuning, valutazione, ML classico, inferenza efficiente."
+    goal: "Funzionalità AI affidabili, misurabili ed economiche."
+    prompt: 21_ai_ml.md
+    tier: main
+    max_tokens: 1200
+    temperature: 0.2
+    reads: [request, history, files, rag, plan, research, issues]
+    keywords: [llm, rag, embedding, embeddings, machine learning, ml, pytorch, tensorflow, fine-tuning, prompt, openai, ollama, modello ai, ai model]
+    aliases: [ai, ml]
+
+  - id: 22
+    key: concurrency
+    name: "Concorrenza & Async"
+    stage: specialist
+    role: "Thread, async/await, lock, code, race condition, deadlock, backpressure, cancellazione."
+    goal: "Codice concorrente corretto, senza race e senza blocchi."
+    prompt: 22_concurrency.md
+    tier: reasoning
+    max_tokens: 900
+    temperature: 0.0
+    reads: [request, plan, artifacts, issues]
+    keywords: [thread, threading, async, await, asyncio, concorrenza, concurrency, lock, mutex, race, deadlock, goroutine, parallel]
+    aliases: [async, concurrency]
+
+  - id: 23
+    key: systems
+    name: "Sistemi & Low-level"
+    stage: specialist
+    role: "C, C++, Rust, memoria, puntatori, ownership, FFI, performance a basso livello, embedded."
+    goal: "Codice di sistema sicuro in memoria e deterministico."
+    prompt: 23_systems.md
+    tier: main
+    max_tokens: 1200
+    temperature: 0.1
+    reads: [request, history, files, rag, plan, research, issues]
+    keywords: ["c++", " c ", rust, unsafe, puntatori, pointer, memoria, memory leak, ffi, embedded, kernel, cmake]
+    aliases: [systems, lowlevel]
+
+  - id: 24
+    key: a11y_i18n
+    name: "Accessibilità & i18n"
+    stage: gate
+    role: "WCAG 2.2, lettori di schermo, tastiera, contrasto; internazionalizzazione, formati locali, RTL, testi traducibili."
+    goal: "Prodotti usabili da tutti e in tutte le lingue."
+    prompt: 24_a11y_i18n.md
+    tier: reasoning
+    max_tokens: 500
+    temperature: 0.0
+    reads: [request, plan, artifacts]
+    keywords: [accessibilità, accessibility, a11y, wcag, screen reader, i18n, internazionalizzazione, traduzioni, locale, rtl]
+    aliases: [a11y, i18n]
+
+  - id: 25
+    key: ux_ui
+    name: "UX/UI Designer"
+    stage: specialist
+    role: "Design system, gerarchia visiva, flussi utente, stati vuoti/errore, micro-interazioni, coerenza."
+    goal: "Interfacce chiare, coerenti e piacevoli."
+    prompt: 25_ux_ui.md
+    tier: main
+    max_tokens: 1000
+    temperature: 0.3
+    reads: [request, history, files, plan, research, issues, image_notes]
+    keywords: [ux, design system, user experience, usabilità, usability, figma, flusso utente, user flow, onboarding, dashboard design]
+    aliases: [ux, design]
+
+  - id: 26
+    key: observability
+    name: "Osservabilità"
+    stage: gate
+    role: "Log strutturati, metriche, tracing (OpenTelemetry), health check, alert, error tracking."
+    goal: "Capire in produzione cosa succede e perché, in pochi minuti."
+    prompt: 26_observability.md
+    tier: reasoning
+    max_tokens: 500
+    temperature: 0.0
+    reads: [request, plan, artifacts]
+    keywords: [log, logging, metriche, metrics, tracing, opentelemetry, sentry, alert, monitoring, osservabilità, observability]
+    aliases: [obs, observability]
+
+  - id: 27
+    key: dependencies
+    name: "Dipendenze & Supply chain"
+    stage: research
+    role: "Versioni delle librerie, compatibilità, licenze, CVE note, pinning, lockfile, dipendenze abbandonate."
+    goal: "Solo dipendenze aggiornate, sicure e con licenza compatibile."
+    prompt: 27_dependencies.md
+    tier: main
+    max_tokens: 600
+    temperature: 0.0
+    reads: [request, plan, artifacts, research]
+    keywords: [dipendenze, dependencies, versione, version, licenza, license, cve, npm audit, pip-audit, lockfile, upgrade]
+    aliases: [deps, dependencies]
+
+  - id: 28
+    key: migration
+    name: "Migrazioni & Legacy"
+    stage: specialist
+    role: "Refactoring su larga scala, migrazioni di framework/versione, strangler pattern, retro-compatibilità."
+    goal: "Cambiare sistemi esistenti senza rompere nulla."
+    prompt: 28_migration.md
+    tier: main
+    max_tokens: 1200
+    temperature: 0.1
+    reads: [request, history, files, rag, plan, research, issues]
+    keywords: [migra, migrate, migration, legacy, upgrade, aggiorna a, porting, deprecat, refactoring grande, strangler]
+    aliases: [migration, legacy]
+
+  - id: 29
+    key: test_strategy
+    name: "Test Strategist"
+    stage: test
+    role: "Strategia di test: piramide, unit/integrazione/e2e, property-based, fixture, mock, copertura dei rischi."
+    goal: "Pochi test, quelli giusti, che trovano i bug veri."
+    prompt: 29_test_strategy.md
+    tier: reasoning
+    max_tokens: 700
+    temperature: 0.1
+    reads: [request, plan, artifacts, test_report]
+    keywords: [strategia di test, test strategy, e2e, end-to-end test, integration test, copertura, coverage, property-based, playwright, cypress]
+    aliases: [teststrategy, qa]
+
+  - id: 30
+    key: threat_model
+    name: "Threat Modeling & Privacy"
+    stage: gate
+    role: "Threat model (STRIDE), superficie d'attacco, dati personali, GDPR, retention, cifratura, audit log."
+    goal: "Rischi di sicurezza e privacy identificati e mitigati by design."
+    prompt: 30_threat_model.md
+    tier: reasoning
+    max_tokens: 600
+    temperature: 0.0
+    reads: [request, plan, artifacts, research]
+    keywords: [threat model, stride, gdpr, privacy, dati personali, personal data, pii, compliance, audit log, cifratura]
+    aliases: [threat, privacy, gdpr]
+
+  - id: 31
+    key: scalability
+    name: "Scalabilità & Carico"
+    stage: gate
+    role: "Capacity planning, colli di bottiglia, caching, sharding, rate limiting, code, test di carico."
+    goal: "Il sistema regge 10x il carico previsto senza sorprese."
+    prompt: 31_scalability.md
+    tier: reasoning
+    max_tokens: 500
+    temperature: 0.0
+    reads: [request, plan, artifacts, test_report]
+    keywords: [scalabilità, scalability, carico, load, milioni di utenti, million users, rate limit, sharding, high traffic, capacity]
+    aliases: [scale, load]
+
+  - id: 32
+    key: release
+    name: "Release & Versioning"
+    stage: docs
+    role: "Semver, changelog, note di rilascio, packaging, migrazioni di rilascio, rollback."
+    goal: "Ogni rilascio è comprensibile, reversibile e senza sorprese per chi lo usa."
+    prompt: 32_release.md
+    tier: main
+    max_tokens: 500
+    temperature: 0.1
+    reads: [request, plan, artifacts]
+    keywords: [release, rilascio, changelog, semver, versioning, pubblica, publish, packaging, tag]
+    aliases: [release, changelog]
+
+  - id: 33
+    key: fact_checker
+    name: "Fact-checker web"
+    stage: gate
+    role: "Verifica sulle fonti ufficiali (online) che API, flag, versioni e librerie usate esistano e siano usate correttamente."
+    goal: "Zero API inventate o deprecate nel codice consegnato."
+    prompt: 33_fact_checker.md
+    tier: reasoning
+    max_tokens: 600
+    temperature: 0.0
+    reads: [request, artifacts, research]
+    keywords: [verifica, verify, fact check, documentazione ufficiale, official docs, deprecated, deprecato]
+    aliases: [factcheck, verify]
+
+  - id: 34
+    key: devils_advocate
+    name: "Avvocato del diavolo"
+    stage: plan
+    role: "Critica il piano: assunzioni deboli, alternative più semplici, rischi ignorati, over-engineering."
+    goal: "Un piano che ha resistito alle obiezioni migliori."
+    prompt: 34_devils_advocate.md
+    tier: reasoning
+    max_tokens: 500
+    temperature: 0.3
+    reads: [request, plan, research]
+    keywords: [alternative, alternativa, pro e contro, trade-off, tradeoff, critica, critique]
+    aliases: [devil, critic]
+
+  - id: 35
+    key: integrator
+    name: "Integratore capo"
+    stage: judge
+    role: "Unisce i risultati di tutti i quality gate, elimina duplicati e falsi positivi, decide cosa correggere e in che ordine."
+    goal: "Una sola lista di correzioni, prioritizzata e azionabile."
+    prompt: 35_integrator.md
+    tier: reasoning
+    max_tokens: 700
+    temperature: 0.0
+    reads: [request, plan, artifacts, test_report, issues]
+    keywords: []
+    aliases: [integrator, judge]

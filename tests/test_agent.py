@@ -223,3 +223,63 @@ def test_agent_nudges_when_model_pastes_code(project):
     result = AgentLoop(llm, make_tools(project), system="# Role: t").run("aggiungi sub")
     assert result.text == "Aggiunta sub in src/calc.py." and result.changed == ["src/calc.py"]
     assert "def sub" in (project / "src" / "calc.py").read_text()
+
+
+# ------------------------------------------------------------------ ultra-deep
+@dataclass
+class UltraLLM(ScriptedLLM):
+    integrator: list[str] = field(default_factory=list)
+
+    def _answer(self, role, messages):
+        if role.startswith("Chief Integrator"):
+            return self.integrator.pop(0) if self.integrator else "DECISION: SHIP\n- [MINOR] x: y\nDropped: none"
+        if role.startswith("Devil"):
+            return "**Verdict**: ADJUST — add input validation"
+        return super()._answer(role, messages)
+
+
+def test_ultra_deep_agent_mode_runs_all_35_agents(project, settings):
+    llm = UltraLLM(
+        steps=[T("write_file", path="src/util.py", content="def double(x):\n    return x * 2\n"), "Creato util.py",
+               T("edit_file", path="src/util.py", old_string="def double(x):", new_string="def double(x: int) -> int:"),
+               "Corretto", "Docs ok"],
+        integrator=["DECISION: FIX\n- [MAJOR] src/util.py: add type hints (from: reviewer)\nDropped: none",
+                    "DECISION: SHIP\n- [MINOR] naming\nDropped: none"])
+    orch = Orchestrator(settings, llm=llm)
+    events = []
+    out = "".join(AgentRunner(orch, project, PermissionPolicy(mode="auto", root=project)).run(
+        "/ultra-deep crea una funzione double", on_event=events.append))
+    roles = {c["role"] for c in llm.calls}
+    for role in ("Requirements Analyst", "Architect", "Devil's Advocate", "Test Strategist", "Chief Integrator",
+                 "Web Fact-checker", "Dependencies & Supply-chain agent", "Threat Modeling & Privacy reviewer",
+                 "Release & Versioning agent", "Documentation", "Output Formatter & Final Delivery",
+                 "Mobile Engineer", "Security reviewer"):
+        assert any(r.startswith(role) for r in roles), role
+    done = [e for e in events if e["type"] == "done"][-1]["summary"]
+    assert done.startswith("ultra-deep · 35 agenti")
+    assert (project / "src" / "util.py").read_text().startswith("def double(x: int) -> int:")
+    assert any(e["type"] == "info" and e["text"].startswith("correzioni, giro 1") for e in events)
+    assert any(e["type"] == "agent_skip" and e["agent"] == "research" for e in events)  # offline nei test
+    assert "📝 File modificati: src/util.py" in out
+    lens = [c for c in llm.calls if c["role"].startswith("Mobile Engineer")][0]
+    assert "Quick lens review" in lens["messages"][1]["content"]
+
+
+def test_ultra_deep_chat_mode(settings):
+    llm = UltraLLM()
+    orch = Orchestrator(settings, llm=llm)
+    out = orch.ask("/ultra-deep crea un endpoint FastAPI")
+    assert orch.last_run.route.mode == "ultra-deep"
+    assert "def add" in out and "Sandbox" in out
+    assert len({c["role"] for c in llm.calls}) >= 30
+
+
+def test_router_ultra(settings, registry):
+    from mydevagent.router import Router
+
+    router = Router(settings, registry)
+    r = router.route("/ultra-deep app mobile con react native e flutter")
+    assert r.mode == "ultra-deep" and "mobile" in r.ultra_relevant
+    assert router.route("crea una app mobile con react native").mode != "ultra-deep"  # mai automatica
+    assert "mobile" not in router.route("app react native semplice").scores  # estesi fuori dalle modalità normali
+    assert router.route("sistema enterprise production-ready con audit completo").suggest_ultra

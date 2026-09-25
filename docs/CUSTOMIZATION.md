@@ -27,6 +27,17 @@ Poi `MYDEVAGENT_PROFILE=mio-pc` (o `profile: mio-pc`). Override veloce senza fil
 - **Regole globali**: `prompts/system_persona.md` (vale per tutti; tienila corta: è nel prefisso di ogni
   chiamata).
 
+## 2b. Memoria del progetto, comandi personalizzati, permessi
+- **`MYDEVAGENT.md`** nella radice: comandi (`- test: pytest -q`), architettura, convenzioni. L'agente lo
+  legge a ogni richiesta; `/init` lo genera, `#nota` aggiunge righe. Letti anche `AGENTS.md`, `CLAUDE.md` e
+  `~/.mydevagent/MYDEVAGENT.md` (preferenze personali per tutti i progetti).
+- **Comandi personalizzati**: `.mydevagent/commands/<nome>.md` → `/nome` (vedi `docs/TUI.md`).
+- **Permessi**: `mydevagent --permissions auto-edit`; regole «consenti sempre» in
+  `.mydevagent/settings.json`, ad esempio:
+  ```json
+  { "allow": ["bash:pytest*", "bash:npm test*", "bash:ruff*", "edit:src/*"] }
+  ```
+
 ## 3. Raggruppamenti (squadre) e modalità
 Le modalità sono gruppi di agenti già pronti. Crea le tue combinazioni in `settings.yaml`:
 
@@ -44,7 +55,8 @@ modes:
 Squadre "al volo" direttamente nel messaggio: `@be @db @sec crea l'endpoint di pagamento`.
 
 ## 4. Sostituire un agente con un altro ruolo
-Il sistema richiede **esattamente 15 agenti** (validato all'avvio). Per cambiare un ruolo, ad esempio
+Il sistema richiede **esattamente 15 agenti nel nucleo** (`agents.yaml`) e **20 estesi** per `/ultra-deep`
+(`agents_ultra.yaml`, id 16-35), validati all'avvio. Per cambiare un ruolo, ad esempio
 trasformare *DevOps* in *Mobile (iOS/Android)*:
 1. in `agents.yaml` cambia `key`, `name`, `role`, `goal`, `keywords`, `aliases`, `prompt` dell'agente 8;
 2. crea `prompts/agents/08_mobile.md` partendo da un prompt specialist esistente;

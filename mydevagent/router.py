@@ -13,7 +13,9 @@ from dataclasses import dataclass, field
 from .config import Settings
 from .registry import AgentRegistry
 
-MODE_CMD_RE = re.compile(r"(?<![\w/])/(fast|balanced|deep)\b", re.IGNORECASE)
+MODE_CMD_RE = re.compile(r"(?<![\w/])/(ultra-deep|fast|balanced|deep)(?![\w-])", re.IGNORECASE)
+ULTRA_HINTS = ("audit completo", "full audit", "enterprise", "mission critical", "mission-critical",
+               "produzione completa", "production-grade", "da zero a produzione")
 MENTION_RE = re.compile(r"(?<![\w@])@([a-zA-Z_][\w-]*)")
 FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 URL_RE = re.compile(r"https?://\S+")
@@ -37,12 +39,16 @@ class Route:
     request: str = ""
     reasons: list[str] = field(default_factory=list)
     scores: dict[str, int] = field(default_factory=dict)
+    suggest_ultra: bool = False
+    ultra_relevant: list[str] = field(default_factory=list)  # agenti estesi pertinenti (ultra-deep)
 
     @property
     def agents(self) -> list[str]:
         """Agenti coinvolti, nell'ordine in cui lavorano."""
         if self.mode == "fast":
             return [self.primary, "formatter"]
+        if self.mode == "ultra-deep":
+            return ["35 agenti"]
         order = (["research"] if self.research else []) + ["architect"] + self.specialists + ["debug_test"]
         order += self.gate + (["docs"] if self.docs else []) + ["formatter"]
         return list(dict.fromkeys(order))
@@ -63,6 +69,7 @@ class Router:
         self._patterns = {
             agent.key: [self._compile(k) for k in agent.keywords] for agent in registry
         }
+        self._core = {a.key for a in registry.core()}
 
     @staticmethod
     def _compile(keyword: str) -> re.Pattern[str]:
@@ -71,10 +78,12 @@ class Router:
             return re.compile(rf"(?<![\w]){re.escape(stripped)}(?![\w])", re.IGNORECASE)
         return re.compile(re.escape(keyword), re.IGNORECASE)
 
-    def score(self, text: str) -> dict[str, int]:
+    def score(self, text: str, include_ultra: bool = False) -> dict[str, int]:
         padded = f" {text} "
         scores = {}
         for key, patterns in self._patterns.items():
+            if not include_ultra and key not in self._core:
+                continue
             hits = sum(1 for p in patterns if p.search(padded))
             if hits:
                 scores[key] = hits
@@ -144,7 +153,7 @@ class Router:
                             scores.setdefault(key, 1)
                     why += " + LLM router"
             reasons.append(why)
-        if mode not in ("fast", "balanced", "deep"):
+        if mode not in ("fast", "balanced", "deep", "ultra-deep"):
             mode = "balanced"
 
         ranked = sorted(scores, key=lambda k: (-scores[k], self.registry[k].id))
@@ -154,6 +163,11 @@ class Router:
         specialists = [k for k in ranked if stage[k] == "specialist"][:MAX_SPECIALISTS]
         if not specialists:
             specialists = ["language"]
+        ultra_relevant: list[str] = []
+        if mode == "ultra-deep":
+            ultra_scores = self.score(FENCE_RE.sub(" ", clean), include_ultra=True)
+            ultra_relevant = [k for k in ultra_scores if k not in self._core]
+            ultra_relevant += [k for k in mentions if k not in self._core and k not in ultra_relevant]
         mode_cfg = self.settings.mode(mode)
         gate = list(mode_cfg.gate)
         for key in ranked:
@@ -172,6 +186,8 @@ class Router:
             request=clean,
             reasons=reasons,
             scores=scores,
+            suggest_ultra=mode == "deep" and any(h in clean.lower() for h in ULTRA_HINTS),
+            ultra_relevant=ultra_relevant,
         )
 
     def _llm_route(self, text: str) -> dict | None:

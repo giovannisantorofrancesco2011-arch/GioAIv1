@@ -1,10 +1,12 @@
-from mydevagent.registry import EXPECTED_AGENT_COUNT, SECTIONS
+from mydevagent.registry import EXPECTED_AGENT_COUNT, EXPECTED_ULTRA_COUNT, SECTIONS
 from mydevagent.tools import Toolbox
 
 
-def test_exactly_15_agents(registry):
-    assert len(registry) == EXPECTED_AGENT_COUNT == 15
-    assert [a.id for a in registry] == list(range(1, 16))
+def test_exactly_15_core_and_20_ultra_agents(registry):
+    assert len(registry.core()) == EXPECTED_AGENT_COUNT == 15
+    assert len(registry.ultra()) == EXPECTED_ULTRA_COUNT == 20
+    assert len(registry) == 35
+    assert [a.id for a in registry] == list(range(1, 36))
 
 
 def test_every_agent_has_prompt_and_valid_reads(registry):

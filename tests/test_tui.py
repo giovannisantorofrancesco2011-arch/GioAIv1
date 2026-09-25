@@ -148,3 +148,65 @@ def test_full_session_scripted(settings, project):
     assert list(project.glob("mydevagent-*.md"))
     user_msgs = [m["content"] for m in app.session.history if m["role"] == "user"]
     assert user_msgs == ["/balanced migliora @src/calc.py"]
+
+
+def test_agent_session_approvals_undo_memory_custom(settings, project):
+    import json
+
+    from tests.test_agent import ScriptedLLM
+
+    (project / ".mydevagent" / "commands").mkdir(parents=True)
+    (project / ".mydevagent" / "commands" / "saluta.md").write_text("description: saluta\nDì ciao a $ARGUMENTS")
+
+    def T(name, **args):
+        return f'<tool name="{name}">{json.dumps(args)}</tool>'
+
+    llm = ScriptedLLM(steps=[
+        T("write_file", path="src/new.py", content="X = 1\n"), "Creato src/new.py",   # turno 1: approvato
+        T("write_file", path="src/other.py", content="Y = 2\n"), "Ok, non lo creo",   # turno 2: rifiutato
+        "Ciao Mario!",                                                                # turno 3: comando custom
+    ])
+    orch = Orchestrator(settings, llm=llm)
+    console = record_console()
+    answers = iter(["1", "3"])
+    with create_pipe_input() as pipe:
+        app = TuiApp(orch, console=console, prompt_input=pipe, prompt_output=DummyOutput(),
+                     ask=lambda q: next(answers), root=project, background=False)
+        pipe.send_text("/fast crea src/new.py\r")
+        pipe.send_text("/fast crea src/other.py\r")
+        pipe.send_text("#usa sempre type hints\r")
+        pipe.send_text("/saluta Mario\r")
+        pipe.send_text("/diff\r")
+        pipe.send_text("/undo\r")
+        pipe.send_text("/plan\r")
+        pipe.send_text("/exit\r")
+        app.loop()
+    out = console.export_text()
+    assert "Create(src/new.py)" in out and "📝 File modificati: src/new.py" in out
+    assert not (project / "src" / "other.py").exists()
+    denied = [m for c in llm.calls for m in c["messages"] if "DENIED by the user" in str(m.get("content"))]
+    assert denied
+    assert "usa sempre type hints" in (project / "MYDEVAGENT.md").read_text()
+    assert "Dì ciao a Mario" in llm.calls[-1]["messages"][-1]["content"]
+    assert "+X = 1" in out  # /diff
+    assert "Annullato" in out and not (project / "src" / "new.py").exists()  # /undo
+    assert app.policy.mode == "plan"
+    assert (project / ".mydevagent" / ".gitignore").read_text() == "*\n"
+
+
+def test_compact_history(settings, project):
+    from mydevagent.tui import extras
+
+    history = [{"role": "user", "content": f"domanda {i}"} for i in range(6)]
+    compacted = extras.compact_history(FakeLLM(), history)
+    assert len(compacted) == 2 and compacted[0]["content"].startswith("[Summary")
+
+
+def test_permission_cycle_and_toolbar(settings, project):
+    orch = Orchestrator(settings, llm=FakeLLM())
+    with create_pipe_input() as pipe:
+        app = TuiApp(orch, console=record_console(), prompt_input=pipe, prompt_output=DummyOutput(),
+                     root=project, background=False)
+    assert app.policy.next_mode() == "auto-edit" and app.policy.next_mode() == "plan"
+    text = "".join(t for _, t in app.toolbar())
+    assert "plan" in text and "agente" in text

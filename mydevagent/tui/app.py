@@ -48,6 +48,7 @@ COMMANDS = {
     "/fast": "modalità veloce (1 agente)",
     "/balanced": "team standard: piano, modifiche, test e review",
     "/deep": "team completo: security, performance, edge case",
+    "/ultra-deep": "35 agenti: dibattito sul piano, mega review, ricerca web se serve (lento)",
     "/auto": "modalità scelta dal router (default)",
     "/plan": "modalità piano: l'agente legge e propone, non modifica nulla",
     "/permissions": "modalità dei permessi (ask · auto-edit · plan · auto) e regole salvate",
@@ -74,7 +75,7 @@ COMMANDS = {
     "/clear": "nuova conversazione",
     "/exit": "esci",
 }
-MODES = ("auto", "fast", "balanced", "deep")
+MODES = ("auto", "fast", "balanced", "deep", "ultra-deep")
 SHELL_TIMEOUT = 120
 MAX_SHELL_OUTPUT = 8000
 NOTIFY_AFTER_S = 20
@@ -310,7 +311,7 @@ class TuiApp:
         elif cmd[1:] in MODES and not arg:
             self.mode = self.session.mode = cmd[1:]
             c.print(f"[dim]⎿  modalità: {self.mode}[/]")
-        elif cmd in ("/fast", "/balanced", "/deep") and arg:
+        elif cmd in ("/fast", "/balanced", "/deep", "/ultra-deep") and arg:
             self.submit(text)  # "/deep crea un'API" → il router gestisce il comando inline
         elif cmd == "/plan":
             self.policy.mode = "ask" if self.policy.mode == "plan" else "plan"
@@ -379,10 +380,11 @@ class TuiApp:
             self._models()
         elif cmd == "/agents":
             table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
-            for col in ("#", "agente", "stage", "alias"):
+            for col in ("#", "agente", "gruppo", "stage", "alias"):
                 table.add_column(col)
             for a in self.orch.registry:
-                table.add_row(str(a.id), a.name, a.stage, " ".join("@" + x for x in a.aliases))
+                group = "nucleo" if a.group == "core" else "ultra"
+                table.add_row(str(a.id), a.name, group, a.stage, " ".join("@" + x for x in a.aliases))
             c.print(table)
         elif cmd == "/files":
             c.print("[dim]⎿  " + (", ".join(self.last_files) or "nessun file allegato") + "[/]")

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ..graph import Cancelled, Team
-from ..state import TeamState, render_files, render_history
+from ..state import TeamState, render_files, render_history, truncate
 from ..tools.web_search import format_results
 from .checkpoints import CheckpointStore
 from .context import project_context, read_memory
@@ -50,7 +50,7 @@ class AgentRunner:
         gates = [] if route.mode == "fast" else route.gate
         agents = ([] if route.mode == "fast" else ["architect"]) + [lead.key] + gates
         emit({"type": "route", "mode": route.mode, "agents": agents + ["formatter"], "reasons": route.reasons,
-              "agentic": True})
+              "agentic": True, "suggest_ultra": route.suggest_ultra})
 
         web = orch.toolbox.ctx.web
         web_fn = (lambda q: format_results(web.search(q))) if settings.tools.web.enabled else None
@@ -71,6 +71,10 @@ class AgentRunner:
         }
         if route.research and web.enabled():
             state["research"] = format_results(web.search(route.request))
+
+        if route.mode == "ultra-deep":
+            yield from self._ultra(route, team, state, tools, context, emit, cancel)
+            return
 
         try:
             plan = ""
@@ -128,6 +132,89 @@ class AgentRunner:
         emit({"type": "done", "summary": f"{route.mode} · agente · {result.steps} passi · "
                                          f"{result.tool_calls} tool · ~{result.prompt_tokens + result.completion_tokens:,} token"
                                          .replace(",", ".")})
+
+    # ------------------------------------------------------------ ultra-deep
+    def _ultra(self, route, team: Team, state: TeamState, tools: AgentTools, context: str, emit, cancel):
+        from ..ultra import UltraPipeline, issues_summary
+
+        orch = self.orch
+        registry = orch.registry
+        settings = orch.settings
+        runner = self
+        emit({"type": "info", "text": "ultra-deep: 35 agenti al lavoro (può richiedere diversi minuti)"})
+
+        class AgentImplementer:
+            def __init__(self) -> None:
+                self.loop: AgentLoop | None = None
+                self.summary = ""
+
+            def implement(self, task: str, specialists: list[str]) -> str:
+                lead = registry[specialists[0]]
+                helpers = "".join(f"\n- {registry[k].name}: {registry[k].role}" for k in specialists[1:])
+                system = "\n\n".join(filter(None, [
+                    registry.persona, f"# Your role: {lead.name}\n{lead.role}\nGoal: {lead.goal}",
+                    f"# Also apply the expertise of:{helpers}" if helpers else "", context]))
+                self.loop = AgentLoop(orch.llm, tools, system=system, tier="main", max_steps=MAX_STEPS["ultra-deep"],
+                                      native=settings.active_profile.native_tools, emit=emit, cancel=cancel,
+                                      context_chars=settings.active_profile.num_ctx * 3)
+                emit({"type": "agent_start", "agent": lead.key, "name": lead.name})
+                started = time.perf_counter()
+                rag = runner._rag(route.request)
+                result = self.loop.run(task + (f"\n\n# Possibly relevant code\n{rag}" if rag else ""))
+                emit({"type": "agent_end", "agent": lead.key, "name": lead.name,
+                      "ms": int((time.perf_counter() - started) * 1000), "prompt_tokens": result.prompt_tokens,
+                      "completion_tokens": result.completion_tokens, "tool_calls": result.tool_calls, "error": None})
+                self.summary = result.text
+                return result.text
+
+            def subject(self) -> str:
+                cp = runner.checkpoints.current
+                diff = runner.checkpoints.session_diff(cp.id if cp else 0)
+                return f"```diff\n{diff}\n```" if diff.strip() else "(no file changes)"
+
+            def run_tests(self) -> str:
+                return tools.execute("run_tests", {})
+
+            def fix(self, fixes: str) -> str:
+                result = self.loop.follow_up("The review board (35 agents) asks you to fix these problems:\n"
+                                             + fixes + "\nFix them with the tools, re-run the tests, then give "
+                                             "your final answer.")
+                self.summary = result.text
+                return result.text
+
+            def apply_docs(self, notes: str) -> str:
+                if not tools.changed:
+                    return ""
+                result = self.loop.follow_up(
+                    "Documentation and release notes from the team are below. If the project has a README or "
+                    "CHANGELOG, update them briefly with tools (skip if not useful). Then give your final "
+                    "answer.\n\n" + truncate(notes, 4000))
+                self.summary = result.text
+                return result.text
+
+        implementer = AgentImplementer()
+        web = orch.toolbox.ctx.web
+        try:
+            pipeline = UltraPipeline(team, route, implementer, online=web.enabled(), web=web)
+            final_state = pipeline.run(state)
+            formatter = registry["formatter"]
+            final_state["artifacts"] = {**final_state.get("artifacts", {}),
+                                        "implementation": f"Agent summary: {implementer.summary}\n\n"
+                                                          f"{implementer.subject()}"}
+            emit({"type": "agent_start", "agent": "formatter", "name": formatter.name})
+            text, entry = team.run_agent("formatter", final_state, task=(
+                "Changes are ALREADY applied to the project files (see the diff). Do not repeat whole files: "
+                "summarise what was built/changed and why, list the files, how to run/test, and residual risks."))
+        except Cancelled:
+            emit({"type": "cancelled"})
+            return
+        yield text or implementer.summary
+        loop_result = implementer.loop.result if implementer.loop else None
+        footer = self._footer(tools, issues_summary(final_state), loop_result) if loop_result else ""
+        yield footer
+        agents_used = len(pipeline.participants | {"formatter"})
+        emit({"type": "done", "summary": f"ultra-deep · {agents_used} agenti · "
+                                         f"{loop_result.steps if loop_result else 0} passi dell'agente"})
 
     # --------------------------------------------------------------- helpers
     def _rag(self, query: str) -> str:

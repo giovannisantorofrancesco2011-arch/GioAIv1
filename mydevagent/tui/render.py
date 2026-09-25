@@ -97,11 +97,15 @@ class TurnRenderer:
         if kind == "route":
             agents = [self.names.get(a, a) for a in event["agents"] if a != "formatter"]
             suffix = " · agente" if event.get("agentic") else ""
-            if event["mode"] == "fast":
+            if event["mode"] == "ultra-deep":
+                c.print(f"[{ACCENT}]⏺[/] [bold]Team ultra-deep[/][dim]{suffix} · 35 agenti · ricerca web se serve[/]")
+            elif event["mode"] == "fast":
                 c.print(f"[dim]⏺ fast{suffix} · {agents[0] if agents else ''}[/]")
             else:
                 c.print(f"[{ACCENT}]⏺[/] [bold]Team {event['mode']}[/][dim]{suffix} · {len(agents)} agenti[/]")
                 c.print(f"  [dim]⎿  {' → '.join(agents)}[/]")
+            if event.get("suggest_ultra"):
+                c.print("  [dim]⎿  suggerimento: per un lavoro di questa portata prova [bold]/ultra-deep[/] (35 agenti)[/]")
         elif kind == "agent_start":
             self.status = f"{event.get('name', event['agent'])} sta lavorando"
             if event["agent"] == "formatter":
@@ -116,6 +120,8 @@ class TurnRenderer:
             elif not event.get("quiet"):
                 tools = f" · {event['tool_calls']} tool" if event.get("tool_calls") else ""
                 c.print(f"[green]⏺[/] [bold]{name}[/]\n  [dim]⎿  {event['ms'] / 1000:.1f}s · {tokens} tok{tools}[/]")
+        elif kind == "agent_skip":
+            c.print(f"[dim]⏺ {escape(event['name'])}\n  ⎿  {escape(event['reason'])}[/]")
         elif kind == "agent_step":
             self.step = event["step"]
             self.status = f"Sto lavorando (passo {self.step})"
@@ -149,7 +155,11 @@ class TurnRenderer:
         elif kind == "tests":
             c.print(f"  {'[green]⎿  ✓ test passati' if event['ok'] else '[red]⎿  ✗ test falliti'}[/]")
         elif kind == "info":
-            c.print(f"  [dim]⎿  {escape(event['text'])}[/]")
+            if event["text"].startswith("fase "):
+                c.print(f"[{ACCENT}]✻[/] [bold]{escape(event['text'])}[/]")
+                self.status = event["text"]
+            else:
+                c.print(f"  [dim]⎿  {escape(event['text'])}[/]")
         elif kind == "cancelled":
             self.cancelled = True
         elif kind == "done":

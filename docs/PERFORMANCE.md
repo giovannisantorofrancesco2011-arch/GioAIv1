@@ -19,6 +19,26 @@ meno possibile. Ecco cosa fa già MyDevAgent e cosa puoi regolare.
 | Codice incollato non gonfia la modalità | `router.prose_length` | un traceback lungo resta in fast |
 | Streaming end-to-end | CLI + server SSE | primo token visibile subito |
 
+### Modalità agente
+| Tecnica | Effetto |
+|---|---|
+| **Warmup** all'apertura della UI (richiesta da 1 token in background) | la prima domanda non paga 5–20 s di caricamento del modello |
+| System prompt fisso per tutto il turno (persona → ruolo → memoria → repo map → regole → tool) | ogni passo del ciclo riusa la prefix cache del server |
+| Output dei tool troncato in mezzo (prime/ultime righe) e `read_file` a finestre | contesto piccolo anche su file e log lunghi |
+| Risultati dei tool più vecchi svuotati quando il contesto supera `num_ctx × 3` caratteri | niente overflow di contesto nei task lunghi |
+| Prompt di ruolo compatto in modalità agente | meno token e meno confusione per i modelli piccoli |
+| Messaggio "tests pass → fermati" dopo test verdi | i modelli piccoli non fanno giri inutili |
+
+## Misurare: `mydevagent bench`
+```bash
+mydevagent bench                     # primo token e token/s di main e fast, con consiglio sul profilo
+mydevagent bench --tiers main,reasoning
+```
+Esempio misurato nel container di sviluppo (solo CPU, nessuna GPU): `qwen2.5-coder:1.5b` → primo token
+0,5 s, ~14 token/s; `qwen2.5-coder:0.5b` → ~29 token/s. Su una GPU da 8 GB un 7B Q4 fa tipicamente
+40–80 token/s. Con la sola CPU la modalità agente funziona ma ogni passo richiede decine di secondi:
+usa `/fast`, un modello 3B o una GPU.
+
 ## Server: le impostazioni che contano di più
 
 ### Ollama

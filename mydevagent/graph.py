@@ -76,7 +76,8 @@ class Team:
             {"role": "user", "content": user},
         ]
 
-    def run_agent(self, key: str, state: TeamState, *, task: str = "") -> tuple[str, dict[str, Any]]:
+    def run_agent(self, key: str, state: TeamState, *, task: str = "",
+                  max_tokens: int | None = None) -> tuple[str, dict[str, Any]]:
         if self.cancel is not None and self.cancel.is_set():
             raise Cancelled(key)
         agent = self.registry[key]
@@ -90,9 +91,9 @@ class Team:
             if use_tools:
                 result: Completion = self.llm.complete_with_tools(
                     msgs, tools=self.toolbox.schemas(agent.tools), executor=self._tool_executor(key),
-                    tier=agent.tier, max_tokens=agent.max_tokens, temperature=agent.temperature)
+                    tier=agent.tier, max_tokens=max_tokens or agent.max_tokens, temperature=agent.temperature)
             else:
-                result = self.llm.complete(msgs, tier=agent.tier, max_tokens=agent.max_tokens,
+                result = self.llm.complete(msgs, tier=agent.tier, max_tokens=max_tokens or agent.max_tokens,
                                            temperature=agent.temperature)
             text = strip_thinking(result.text)
             error = None

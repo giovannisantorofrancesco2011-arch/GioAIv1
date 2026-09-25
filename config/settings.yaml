@@ -71,6 +71,12 @@ modes:
     max_review_rounds: 2
     think: true
     docs: true
+  ultra-deep:
+    # 35 agenti: vedi mydevagent/ultra.py e config/agents_ultra.yaml
+    gate: [security, performance, edge_cases, reviewer, a11y_i18n, observability, threat_model, scalability, fact_checker, dependencies]
+    max_review_rounds: 3
+    think: true
+    docs: true
 
 router:
   default_mode: auto        # auto | fast | balanced | deep

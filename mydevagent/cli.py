@@ -214,16 +214,17 @@ def index(
 
 @app.command()
 def agents() -> None:
-    """Elenca i 15 agenti."""
+    """Elenca gli agenti (15 nucleo + 20 ultra-deep)."""
     from .config import get_settings
     from .registry import load_registry
 
     registry = load_registry(get_settings())
-    table = Table(title="MyDevAgent — 15 agenti", show_lines=False)
-    for col in ("#", "Agente", "Stage", "Tier", "Tool", "Alias"):
+    table = Table(title=f"MyDevAgent — {len(registry)} agenti (15 nucleo + {len(registry.ultra())} ultra-deep)",
+                  show_lines=False)
+    for col in ("#", "Agente", "Gruppo", "Stage", "Tier", "Alias"):
         table.add_column(col)
     for a in registry:
-        table.add_row(str(a.id), a.name, a.stage, a.tier, ", ".join(a.tools) or "—",
+        table.add_row(str(a.id), a.name, "nucleo" if a.group == "core" else "ultra", a.stage, a.tier,
                       " ".join("@" + x for x in a.aliases))
     console.print(table)
 
@@ -243,6 +244,62 @@ def route(request: str, as_json: bool = typer.Option(False, "--json")) -> None:
         console.print_json(json.dumps(data))
     else:
         console.print(f"[bold]{r.mode}[/bold] → {' → '.join(r.agents)}\n[dim]{'; '.join(r.reasons)}[/dim]")
+
+
+@app.command()
+def bench(
+    profile: str = typer.Option(None, "--profile", "-p"),
+    tiers: str = typer.Option("main,fast", help="tier da misurare, separati da virgola"),
+) -> None:
+    """Misura primo token e velocità (token/s) dei modelli sul tuo hardware e consiglia il profilo."""
+    import time
+
+    from .config import load_settings
+    from .llm import build_llm
+
+    settings = load_settings(overrides={"profile": profile} if profile else None)
+    llm = build_llm(settings)
+    prompt = [{"role": "system", "content": "You are a concise senior engineer."},
+              {"role": "user", "content": "Write a Python function that returns the n-th Fibonacci number "
+                                          "iteratively, with type hints and a docstring. Code only."}]
+    table = Table(title=f"Benchmark · profilo {settings.profile}")
+    for col in ("tier", "modello", "primo token", "token/s", "totale"):
+        table.add_column(col)
+    speeds: dict[str, float] = {}
+    for tier in [t.strip() for t in tiers.split(",") if t.strip()]:
+        model = settings.resolve_model(tier)[0]
+        try:
+            llm.complete([{"role": "user", "content": "ok"}], tier=tier, max_tokens=1)  # warmup/caricamento
+            start = time.perf_counter()
+            first = None
+            text = ""
+            for chunk in llm.stream(prompt, tier=tier, max_tokens=256, temperature=0.0):
+                if first is None:
+                    first = time.perf_counter() - start
+                text += chunk
+            total = time.perf_counter() - start
+            tokens = max(1, len(text) // 4)
+            gen_time = max(1e-3, total - (first or 0))
+            speeds[tier] = tokens / gen_time
+            table.add_row(tier, model, f"{(first or 0):.2f}s", f"{speeds[tier]:.1f}", f"{total:.1f}s")
+        except Exception as exc:
+            table.add_row(tier, model, "[red]errore[/red]", "-", f"[red]{type(exc).__name__}[/red]")
+    console.print(table)
+    main_speed = speeds.get("main")
+    if main_speed is None:
+        console.print("[yellow]Nessuna misura sul modello principale: controlla `mydevagent doctor`.[/yellow]")
+        return
+    order = ["cpu", "gpu8", "gpu16", "gpu24"]
+    idx = order.index(settings.profile) if settings.profile in order else 1
+    if main_speed < 8 and idx > 0:
+        console.print(f"[yellow]Lento ({main_speed:.0f} tok/s): prova il profilo [bold]{order[idx - 1]}[/bold] "
+                      "o /fast per le richieste semplici.[/yellow]")
+    elif main_speed > 45 and idx < len(order) - 1:
+        console.print(f"[green]Veloce ({main_speed:.0f} tok/s): puoi provare il profilo [bold]{order[idx + 1]}"
+                      "[/bold] per più qualità.[/green]")
+    else:
+        console.print(f"[green]Il profilo {settings.profile} è adatto a questo PC ({main_speed:.0f} tok/s).[/green]")
+    console.print("[dim]Stima token ≈ caratteri/4. Consigli di velocità: docs/PERFORMANCE.md[/dim]")
 
 
 @app.command()

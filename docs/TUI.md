@@ -1,75 +1,128 @@
 # Interfaccia da terminale (stile Claude Code)
 
 ```bash
-mydevagent                 # apre l'interfaccia nella cartella corrente
-mydevagent -p gpu16        # con un altro profilo
-mydevagent --continue      # riprende l'ultima sessione di questa cartella
-mydevagent chat --plain    # vecchia chat semplice (pipe, terminali limitati)
+mydevagent                               # apre l'interfaccia nella cartella del progetto
+mydevagent -p gpu16                      # con un altro profilo
+mydevagent --continue                    # riprende l'ultima sessione di questa cartella
+mydevagent --permissions auto-edit       # modifiche automatiche, comandi con conferma
+mydevagent chat --plain                  # vecchia chat semplice (pipe, terminali limitati)
 ```
 
 ```
-╭──────────────────────────────────────────────────────────────╮
-│  ✻ Benvenuto in MyDevAgent  15 agenti · local-first          │
-│  cwd:     ~/code/mio-progetto                                │
-│  profilo: gpu8 · modello: qwen2.5-coder:7b                   │
-╰──────────────────────────────────────────────────────────────╯
-> /balanced migliora @src/calc.py con type hints
-  ⎿  allegato src/calc.py
-⏺ Team balanced · 5 agenti
-  ⎿  Architetto del Codice → Linguaggi & Framework → Debugging & Testing → Code Reviewer & Refactor → Formatter
-⏺ Architetto del Codice
-  ⎿  4.1s · 946 tok
-⏺ Linguaggi & Framework
-  ⎿  6.3s · 870 tok
-⠋ ✻ Debugging & Testing sta lavorando… (Ctrl+C per interrompere · 12s · 2.1k tok)
+> aggiungi sub(a, b) in calc.py e un test
+⏺ fast · agente · Linguaggi & Framework
+⏺ Read(calc.py)
+  ⎿  calc.py (2 lines)
+⏺ Update(calc.py)
+@@ -1,2 +1,5 @@
+ def add(a, b):
+     return a + b
++
++def sub(a, b):
++    return a - b
+Applicare la modifica a calc.py?  1 Sì  2 Sì, e non chiedere più  3 No
+  › 1
+⏺ Test(python -m pytest -q)
+  ⎿  ✓ test passati
+Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
+---
+📝 File modificati: calc.py, test_calc.py  (/undo per annullare)
+✅ Test: passati (python -m pytest -q)
 
- gpu8  qwen2.5-coder:7b · modo auto · ● online · ~4.831 tok ·  main
+ agente ⏵ ask (shift+tab) · qwen2.5-coder:7b · modo auto · ● online · ~3.2k tok ·  main
 ```
+
+## Modalità agente (default) e modalità chat
+- **agente** (`/agent`): il team lavora **direttamente sui file** della cartella in cui hai aperto
+  MyDevAgent, con dei tool: `read_file`, `list_files`, `grep`, `edit_file` (sostituzione esatta di un
+  pezzo di testo), `write_file`, `bash`, `run_tests`, `todo_write`, `web_search`.
+- **chat** (`/chat`): risponde con il codice senza toccare i file; `/apply` lo salva dopo il diff.
+
+## Permessi (come Claude Code) — `Shift+Tab` per cambiarli
+| Modalità | Letture | Modifiche ai file | Comandi |
+|---|---|---|---|
+| `ask` (default) | ✓ | chiede conferma con il diff | chiede conferma (i comandi di sola lettura no) |
+| `auto-edit` | ✓ | automatiche | chiede conferma |
+| `plan` | ✓ | ✗ — l'agente propone un piano | solo sola lettura (`ls`, `git status`, …) |
+| `auto` | ✓ | automatiche | automatici |
+
+- Alla conferma: **1 Sì** · **2 Sì, e non chiedere più** (salva una regola in `.mydevagent/settings.json`,
+  es. `bash:pytest*` o `edit:src/app.py`) · **3 No**, e puoi scrivere cosa fare invece: l'agente lo riceve.
+- `rm -rf`, `sudo`, `git push --force`, `git reset --hard`, `curl … | sh` & co. chiedono **sempre**
+  conferma, anche in `auto`. `.env` e le chiavi non vengono mai letti né modificati.
+- Prima di ogni modifica il file viene salvato in `.mydevagent/checkpoints/` → `/undo` e `/rewind`.
+  `.mydevagent/` contiene un proprio `.gitignore`: non finisce nei tuoi commit.
 
 ## Input
 | Tasto / sintassi | Effetto |
 |---|---|
 | `Enter` | invia |
-| `Alt+Enter` o `Ctrl+J` | nuova riga (messaggi multi-riga, codice incollato) |
+| `Alt+Enter` o `Ctrl+J` | nuova riga |
 | `Tab` | completa `/comandi`, `@file`, `@agenti` |
-| `↑` / `↓` | cronologia (salvata in `~/.mydevagent/history`) |
-| `Ctrl+C` | durante una risposta: interrompe (2 volte = forza). Al prompt: pulisce (2 volte = esce) |
+| `↑` / `↓` | cronologia (`~/.mydevagent/history`) |
+| `Shift+Tab` | cambia modalità dei permessi (ask → auto-edit → plan) |
+| `Esc` o `Ctrl+C` | durante il lavoro: interrompe (due volte = forza). Al prompt `Ctrl+C` pulisce, due volte esce |
+| `Esc Esc` | al prompt: `/rewind` |
 | `Ctrl+D` | esce (la sessione viene salvata) |
 | `@percorso/file` | allega il file al messaggio |
-| `@security` `@perf` `@web` `@db` … | coinvolge un agente (vedi `docs/AGENTS.md`) |
-| `!comando` | esegue un comando shell nella cartella (es. `!pytest -q`) e allega l'output al messaggio successivo |
+| `@security` `@perf` `@web` `@mobile` `@gdpr` … | coinvolge un agente |
+| `!comando` | esegue un comando shell (es. `!pytest -q`) e ne allega l'output al messaggio successivo |
+| `#testo` | aggiunge una nota a `MYDEVAGENT.md` (memoria del progetto) |
 
 ## Comandi
 | Comando | Cosa fa |
 |---|---|
 | `/help` | comandi e scorciatoie |
-| `/fast` `/balanced` `/deep` `/auto` | cambia modalità (oppure `/deep <richiesta>` per un solo messaggio) |
-| `/apply` | scrive su disco i file dell'ultima risposta: diff per ogni file, poi **1 Sì · 2 Sì a tutti · 3 No**. Solo dentro la cartella del progetto, mai file sensibili (`.env`, chiavi) |
-| `/agents` | i 15 agenti con i loro alias |
-| `/files` | file allegati all'ultimo messaggio |
-| `/cost` | turni, token, tempo |
-| `/think` | mostra/nasconde i blocchi di ragionamento del modello |
-| `/index` | indicizza il progetto per il RAG |
-| `/resume` | riprende una sessione precedente di questa cartella |
-| `/export` | salva la conversazione in `mydevagent-<id>.md` |
-| `/clear` | nuova conversazione |
-| `/exit` | esci |
+| `/fast` `/balanced` `/deep` `/ultra-deep` `/auto` | modalità del team (oppure `/deep <richiesta>` per un solo messaggio) |
+| `/plan` | modalità piano (sola lettura) · `/plan <richiesta>` |
+| `/permissions [modalità]` | mostra/cambia i permessi e le regole salvate |
+| `/undo` · `/rewind` | annulla l'ultimo turno · torna a prima di un turno scelto |
+| `/diff` | tutte le modifiche fatte ai file in questa sessione |
+| `/agent` · `/chat` | lavora sui file · rispondi soltanto |
+| `/apply` | (chat) scrive i file dell'ultima risposta dopo il diff |
+| `/init` | l'agente analizza il progetto e crea `MYDEVAGENT.md` (comandi, architettura, convenzioni) |
+| `/memory [testo]` | mostra la memoria del progetto · aggiunge una nota |
+| `/compact` | riassume la conversazione (automatico oltre 10 turni) |
+| `/model <nome>` · `/models` | cambia modello per la sessione · modelli installati e in uso |
+| `/agents` | i 35 agenti (nucleo e ultra) |
+| `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
+| `/index` | indicizza il progetto per la ricerca semantica (di solito lo fa da solo in background) |
+| `/doctor` | verifica backend, modelli, rete, sandbox |
+| `/theme [dark\|light]` | tema dei diff e del codice |
+| `/resume` · `/export` · `/clear` · `/exit` | sessioni, export Markdown, nuova conversazione, esci |
+
+## Memoria del progetto: `MYDEVAGENT.md`
+Un file nella radice del progetto con comandi, architettura e convenzioni: l'agente lo legge a ogni
+richiesta (legge anche `AGENTS.md` e `CLAUDE.md` se ci sono, più `~/.mydevagent/MYDEVAGENT.md` per le tue
+preferenze globali). Crealo con `/init`, aggiungi note al volo con `#usa sempre pnpm`. Se contiene una
+riga `- test: <comando>`, l'agente usa quel comando per i test.
+
+## Comandi personalizzati
+Crea `.mydevagent/commands/<nome>.md` (nel progetto) o `~/.mydevagent/commands/<nome>.md` (per tutti i
+progetti). `$ARGUMENTS` viene sostituito con il testo dopo il comando; la prima riga `description:` compare
+nel completamento.
+
+```markdown
+description: scrive i test mancanti per un file
+Leggi $ARGUMENTS, individua i casi non coperti e scrivi test con il framework del progetto. Poi eseguili.
+```
+→ `/testa src/api/users.py`
+
+## `/ultra-deep`
+35 agenti per i lavori importanti: ricerca web se serve, requisiti, piano con avvocato del diavolo,
+strategia di test, implementazione, test reali, 10 quality gate e 15 lens review in parallelo,
+Integratore capo, fino a 3 giri di correzione, documentazione e release. Le fasi compaiono come
+`✻ fase 4/8 · implementazione`. Sono 35–50+ chiamate al modello: con un 7B locale servono diversi minuti.
 
 ## Come è fatta (`mydevagent/tui/`)
 | File | Ruolo |
 |---|---|
-| `app.py` | `TuiApp`: loop di input, comandi, `!shell`, allegati; esegue `Orchestrator.run` in un thread e disegna gli eventi dalla coda |
-| `render.py` | `TurnRenderer`: righe `⏺`/`⎿` per agenti e tool, spinner, Markdown in streaming (i blocchi completi vanno nello scrollback, solo la coda resta animata) |
-| `completion.py` | completamento di `/comandi`, `@agenti`, `@file` |
-| `apply.py` | `/apply`: diff + conferma + scrittura confinata nella workspace |
-| `session.py` | sessioni in `~/.mydevagent/sessions/` (`MYDEVAGENT_STATE_DIR` per cambiarla) |
-
-L'interruzione usa `Orchestrator.run(cancel=threading.Event())`: il team si ferma prima dell'agente
-successivo e lo streaming si chiude al chunk successivo.
+| `app.py` | `TuiApp`: input, comandi, permessi, `!shell`, allegati; esegue `AgentRunner` (o `Orchestrator`) in un thread e disegna gli eventi dalla coda; le conferme passano dal thread della UI |
+| `render.py` | `TurnRenderer`: righe `⏺`/`⎿`, diff colorati, todo, fasi, spinner, Markdown in streaming |
+| `keys.py` | `Esc` durante il lavoro (quando prompt_toolkit non legge la tastiera) |
+| `extras.py` | comandi personalizzati, compattazione, notifiche, warmup del modello |
+| `completion.py` · `apply.py` · `session.py` | completamento · `/apply` · sessioni e `/resume` |
 
 ### Aggiungere un comando
-1. aggiungi nome e descrizione a `COMMANDS` in `app.py` (compare subito in `/help` e nel completamento);
-2. gestiscilo in `TuiApp.handle_command` con un nuovo `elif cmd == "/nome":`.
-
-### Cambiare i colori
-`ACCENT` in `render.py` (colore principale) e `_style()` in `app.py` (prompt, toolbar, menu).
+Aggiungi nome e descrizione a `COMMANDS` in `app.py` e gestiscilo in `TuiApp.handle_command`
+(oppure, senza codice, crea un comando personalizzato come sopra).
