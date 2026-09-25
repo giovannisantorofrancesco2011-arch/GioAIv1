@@ -8,6 +8,7 @@ revisionano il diff reale e l'agente corregge.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -25,7 +26,28 @@ from .permissions import Approver, PermissionPolicy
 from .tools import AgentTools
 
 MAX_STEPS = {"fast": 15, "balanced": 25, "deep": 35, "ultra-deep": 45}
+CHANGE_INTENT_RE = re.compile(
+    r"\b(aggiung\w*|crea\w*|modific\w*|implement\w*|sistem\w*|correggi\w*|rimuov\w*|elimin\w*|rinomin\w*|"
+    r"sposta\w*|scriv\w*|refactor\w*|migra\w*|aggiorn\w*|add|create|implement|fix|remove|delete|rename|"
+    r"refactor|write|update|migrate|change|build)\b", re.IGNORECASE)
+
+
+QUESTION_RE = re.compile(
+    r"^\s*(cosa|che cosa|come|perch[eé]|quale|quali|quando|dove|chi|quanto|spiega\w*|descrivi\w*|mostra\w*|"
+    r"what|how|why|which|when|where|who|explain|describe|show|is|are|does|do|can|should)\b", re.IGNORECASE)
+
+
+def wants_changes(request: str) -> bool:
+    """La richiesta chiede di modificare il progetto (e non solo una spiegazione o una domanda)?"""
+    text = re.sub(r"^\s*/[\w-]+\s*", "", request)  # toglie /fast, /deep, …
+    if QUESTION_RE.match(text) or (text.rstrip().endswith("?") and not re.match(
+            r"\s*(puoi|potresti|can you|could you)\b", text, re.IGNORECASE)):
+        return False
+    return bool(CHANGE_INTENT_RE.search(text))
 EventHandler = Callable[[dict[str, Any]], None]
+NO_CHANGES = ("The request asks to change the project, but you have not modified any file. Apply the changes now "
+              "with edit_file / write_file, run the tests, then give your final answer. If you believe no change is "
+              "needed, explain why in one line.")
 
 
 class AgentRunner:
@@ -105,6 +127,11 @@ class AgentRunner:
                   "prompt_tokens": result.prompt_tokens, "completion_tokens": result.completion_tokens,
                   "tool_calls": result.tool_calls, "error": None, "quiet": True})
 
+            if (not tools.changed and not tools.user_denied and wants_changes(route.request)
+                    and self.policy.mode != "plan"):
+                emit({"type": "info", "text": "nessun file modificato: chiedo all'agente di applicare le modifiche"})
+                result = loop.follow_up(NO_CHANGES)
+
             review_note = ""
             rounds = settings.mode(route.mode).max_review_rounds if route.mode != "fast" else 0
             round_ = 0
@@ -128,7 +155,7 @@ class AgentRunner:
             return
 
         yield result.text or "(nessuna risposta)"
-        yield self._footer(tools, review_note, result)
+        yield self._footer(tools, review_note, result, wants_changes(route.request) and self.policy.mode != "plan")
         emit({"type": "done", "summary": f"{route.mode} · agente · {result.steps} passi · "
                                          f"{result.tool_calls} tool · ~{result.prompt_tokens + result.completion_tokens:,} token"
                                          .replace(",", ".")})
@@ -166,6 +193,9 @@ class AgentRunner:
                       "completion_tokens": result.completion_tokens, "tool_calls": result.tool_calls, "error": None})
                 self.summary = result.text
                 return result.text
+
+            def expects_changes(self) -> bool:
+                return wants_changes(route.request) and runner.policy.mode != "plan"
 
             def subject(self) -> str:
                 cp = runner.checkpoints.current
@@ -210,7 +240,8 @@ class AgentRunner:
             return
         yield text or implementer.summary
         loop_result = implementer.loop.result if implementer.loop else None
-        footer = self._footer(tools, issues_summary(final_state), loop_result) if loop_result else ""
+        footer = self._footer(tools, issues_summary(final_state), loop_result,
+                              wants_changes(route.request)) if loop_result else ""
         yield footer
         agents_used = len(pipeline.participants | {"formatter"})
         emit({"type": "done", "summary": f"ultra-deep · {agents_used} agenti · "
@@ -261,7 +292,7 @@ class AgentRunner:
         return [i for i in issues if i["severity"] in ("BLOCKER", "MAJOR")]
 
     @staticmethod
-    def _footer(tools: AgentTools, review_note: str, result) -> str:
+    def _footer(tools: AgentTools, review_note: str, result, request_wants_changes: bool = False) -> str:
         lines = []
         if tools.changed:
             lines.append("📝 File modificati: " + ", ".join(tools.changed) + "  (/undo per annullare)")
@@ -270,6 +301,9 @@ class AgentRunner:
             lines.append(f"{'✅' if ok else '❌'} Test: {'passati' if ok else 'falliti'} ({command})")
         elif tools.changed:
             lines.append("⚠️ Test: non eseguiti")
+        if not tools.changed and request_wants_changes and not tools.user_denied:
+            lines.insert(0, "⚠️ Nessun file modificato: l'agente non ha applicato modifiche (riprova, o usa un modello "
+                            "più grande)")
         if review_note:
             lines.append(review_note)
         if result.stopped == "max_steps":

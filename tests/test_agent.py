@@ -283,3 +283,19 @@ def test_router_ultra(settings, registry):
     assert router.route("crea una app mobile con react native").mode != "ultra-deep"  # mai automatica
     assert "mobile" not in router.route("app react native semplice").scores  # estesi fuori dalle modalità normali
     assert router.route("sistema enterprise production-ready con audit completo").suggest_ultra
+
+
+def test_runner_insists_when_no_file_changed(project, settings):
+    llm = ScriptedLLM(steps=["Ecco come fare: aggiungi la funzione.",  # nessuna modifica
+                             T("write_file", path="src/sub.py", content="def sub(a, b):\n    return a - b\n"),
+                             "Fatto."])
+    out = "".join(AgentRunner(Orchestrator(settings, llm=llm), project,
+                              PermissionPolicy(mode="auto", root=project)).run("/fast aggiungi sub in src/sub.py"))
+    assert (project / "src" / "sub.py").exists() and "Nessun file modificato" not in out
+
+
+def test_footer_warns_when_nothing_changed(project, settings):
+    llm = ScriptedLLM(steps=["Non so come fare.", "Ancora niente."])
+    out = "".join(AgentRunner(Orchestrator(settings, llm=llm), project,
+                              PermissionPolicy(mode="auto", root=project)).run("/fast aggiungi sub in calc"))
+    assert "⚠️ Nessun file modificato" in out

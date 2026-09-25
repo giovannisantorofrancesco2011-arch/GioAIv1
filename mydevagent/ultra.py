@@ -140,6 +140,11 @@ class UltraPipeline:
             debug = self._agent("debug_test", state, "Analyse the test report: root cause of any failure "
                                 "and the exact fix. If everything passes, say so in one line.", max_tokens=500)
             issues: list[dict[str, Any]] = []
+            expects = getattr(self.impl, "expects_changes", lambda: False)()
+            if expects and "(no file changes)" in state["artifacts"]["implementation"]:
+                issues.append({"agent": "integrator", "severity": "BLOCKER", "round": round_,
+                               "text": "no file was changed although the request asks for changes: apply them "
+                                       "with edit_file/write_file"})
             if state["test_report"].startswith(("FAIL", "TIMEOUT", "exit code")) and not \
                     state["test_report"].startswith("exit code 0"):
                 issues.append({"agent": "debug_test", "severity": "BLOCKER", "round": round_,
@@ -153,6 +158,9 @@ class UltraPipeline:
             # 7. integratore
             self._phase("fase 7/8 · integrazione delle revisioni")
             decision, fixes = self._integrate(state)
+            forced = [f"- [BLOCKER] {i['text']}" for i in issues if i["agent"] == "integrator"]
+            if forced:  # controllo deterministico: nessuna modifica = sempre da correggere
+                decision, fixes = "FIX", forced + fixes
             if decision == "SHIP" or round_ >= self.max_rounds:
                 if decision != "SHIP":
                     self._phase(f"limite di {self.max_rounds} giri di correzione raggiunto")

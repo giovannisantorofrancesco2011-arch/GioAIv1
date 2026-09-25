@@ -114,6 +114,7 @@ class AgentTools:
         self.changed: list[str] = []
         self.read_paths: set[str] = set()
         self.last_test: tuple[str, bool, str] | None = None  # (comando, ok, output)
+        self.user_denied = False  # l'utente ha rifiutato qualcosa in questo turno
         self._lock = threading.Lock()
 
     # ----------------------------------------------------------------- spec
@@ -165,6 +166,7 @@ class AgentTools:
             return None
         if answer == "yes":
             return None
+        self.user_denied = True
         return "DENIED by the user." + (f" User says: {feedback}" if feedback else
                                          " Ask what to do differently or try another approach.")
 
