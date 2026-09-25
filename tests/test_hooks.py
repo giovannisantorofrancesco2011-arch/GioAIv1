@@ -46,7 +46,7 @@ def test_sources_trust_and_plugins(project, tmp_path):
     found = {(h.source, h.event) for h in hooks.load_hooks(project)}
     assert found == {("claude code", "PostToolUse"), ("plugin fmt", "PreToolUse")}  # il progetto aspetta il sì
     assert [h.command for h in hooks.untrusted(project)] == ["echo progetto"]
-    hooks.trust(project)
+    hooks.allow(project)
     assert not hooks.untrusted(project) and len(hooks.load_hooks(project)) == 3
     settings_file(project / ".mydevagent" / "settings.json", "Stop", "echo nuovo")  # cambiati: si richiede
     assert len(hooks.untrusted(project)) == 2 and len(hooks.load_hooks(project)) == 2

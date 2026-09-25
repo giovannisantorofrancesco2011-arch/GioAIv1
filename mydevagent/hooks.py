@@ -15,7 +15,6 @@ SubagentStop. Il comando riceve il JSON dell'evento su stdin; exit code 2 = bloc
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -27,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import trust
 from .plugins import load_plugins
 
 EVENTS = ("PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop", "SubagentStop", "SessionStart")
@@ -124,28 +124,18 @@ def all_hooks(root: Path) -> list[Hook]:
     return hooks
 
 
-def _trust_file() -> Path:
-    return Path(os.environ.get("MYDEVAGENT_STATE_DIR", Path.home() / ".mydevagent")) / "trusted_hooks.json"
-
-
-def fingerprint(hooks: list[Hook]) -> str:
-    return hashlib.sha256("\n".join(sorted(f"{h.event}|{h.matcher}|{h.command}" for h in hooks)).encode()).hexdigest()
+def _items(hooks: list[Hook]) -> list[str]:
+    return [f"{h.event}|{h.matcher}|{h.command}" for h in hooks if h.project]
 
 
 def untrusted(root: Path) -> list[Hook]:
     """Gli hook del progetto che aspettano il tuo sì (di nuovo, se sono cambiati da allora)."""
-    project = [h for h in all_hooks(root) if h.project]
-    if not project or _json(_trust_file()).get(str(Path(root).resolve())) == fingerprint(project):
-        return []
-    return project
+    found = all_hooks(root)
+    return [] if trust.is_trusted(root, "hooks", _items(found)) else [h for h in found if h.project]
 
 
-def trust(root: Path) -> None:
-    path = _trust_file()
-    data = _json(path)
-    data[str(Path(root).resolve())] = fingerprint([h for h in all_hooks(root) if h.project])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+def allow(root: Path) -> None:
+    trust.trust(root, "hooks", _items(all_hooks(root)))
 
 
 def load_hooks(root: Path) -> list[Hook]:

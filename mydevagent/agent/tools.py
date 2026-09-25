@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..hooks import Hooks
+from ..mcp import McpManager
 from ..skills import Skill
 from ..tools.filesystem import IGNORED_DIRS, Workspace, WorkspaceError
 from .checkpoints import CheckpointStore
@@ -54,6 +55,11 @@ SPECS: list[dict[str, Any]] = [
          "required": ["todos"]}},
     {"name": "web_search", "description": "Search the web for up-to-date docs, versions, errors (only online).",
      "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "mcp", "description": "Use an external MCP server (see the MCP servers list). With only `server`, "
+     "list its tools and their arguments; with `tool` and `arguments`, call one.",
+     "parameters": {"type": "object", "properties": {
+         "server": {"type": "string"}, "tool": {"type": "string"}, "arguments": {"type": "object"}},
+         "required": ["server"]}},
     {"name": "skill", "description": "Load a skill's instructions by name (see the Skills list). With `file`, "
      "read one of the skill's supporting files.",
      "parameters": {"type": "object", "properties": {
@@ -107,7 +113,7 @@ class AgentTools:
                  approver: Approver | None = None, emit: EventHandler | None = None,
                  web_search: Callable[[str], str] | None = None, memory: str = "",
                  bash_timeout: int = 120, skills: dict[str, Skill] | None = None,
-                 hooks: Hooks | None = None) -> None:
+                 hooks: Hooks | None = None, mcp: McpManager | None = None) -> None:
         self.root = Path(root).resolve()
         self.workspace = Workspace(self.root, allow_write=True)
         self.policy = policy
@@ -119,6 +125,7 @@ class AgentTools:
         self.bash_timeout = bash_timeout
         self.skills = skills or {}
         self.hooks = hooks
+        self.mcp = mcp
         self.todos: list[dict[str, str]] = []
         self.changed: list[str] = []
         self.read_paths: set[str] = set()
@@ -129,7 +136,7 @@ class AgentTools:
     # ----------------------------------------------------------------- spec
     def specs(self) -> list[dict[str, Any]]:
         specs = [s for s in SPECS if (s["name"] != "web_search" or self.web_search_fn)
-                 and (s["name"] != "skill" or self.skills)]
+                 and (s["name"] != "skill" or self.skills) and (s["name"] != "mcp" or self.mcp)]
         if self.policy.mode == "plan":
             specs = [s for s in specs if s["name"] not in EDIT_TOOLS]
         return specs
@@ -167,6 +174,8 @@ class AgentTools:
         """Esegue gli hook del tool: (bloccato?, messaggio per il modello)."""
         if not self.hooks:
             return False, ""
+        if name == "mcp" and args.get("tool"):  # per gli hook è mcp__server__tool, come in Claude Code
+            name, args = f"mcp__{args.get('server')}__{args['tool']}", dict(args.get("arguments") or {})
         payload = self.hooks.tool_payload(name, args)
         if result is not None:
             payload["tool_response"] = {"output": result, "success": not result.startswith(("ERROR", "DENIED"))}
@@ -242,6 +251,33 @@ class AgentTools:
             return f"ERROR: unknown skill '{name}'. Available: {', '.join(self.skills) or 'none'}"
         self.emit({"type": "info", "text": f"skill {skill.name}" + (f" · {file}" if file else "")})
         return skill.read(file)
+
+    def _t_mcp(self, server: str, tool: str | None = None, arguments: dict[str, Any] | str | None = None) -> str:
+        srv = self.mcp.servers.get(server) if self.mcp else None
+        if srv is None:
+            names = ", ".join(self.mcp.servers) if self.mcp else ""
+            return f"ERROR: unknown MCP server '{server}'. Available: {names or 'none'}"
+        srv.connect()
+        if srv.error:
+            return f"ERROR: MCP server '{server}' is not available: {srv.error}"
+        if not tool:
+            return self.mcp.list_tools(srv)
+        spec = srv.tool(tool)
+        if spec is None:
+            return f"ERROR: '{server}' has no tool '{tool}'.\n{self.mcp.list_tools(srv)}"
+        if isinstance(arguments, str):  # i modelli piccoli a volte mandano il JSON come stringa
+            try:
+                arguments = json.loads(arguments)
+            except ValueError:
+                return "ERROR: `arguments` must be a JSON object"
+        arguments = arguments if isinstance(arguments, dict) else {}
+        read_only = bool((spec.get("annotations") or {}).get("readOnlyHint"))
+        denied = self._authorize("mcp", {"server": server, "tool": tool, "arguments": arguments,
+                                         "read_only": read_only},
+                                 f"MCP({server}.{tool} {json.dumps(arguments, ensure_ascii=False)[:200]})")
+        if denied:
+            return denied
+        return srv.call(tool, arguments)
 
     def _t_grep(self, pattern: str, glob: str = "*") -> str:
         try:

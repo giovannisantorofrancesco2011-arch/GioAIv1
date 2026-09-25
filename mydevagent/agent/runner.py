@@ -18,6 +18,7 @@ from typing import Any
 
 from ..graph import Cancelled, Team
 from ..hooks import Hooks
+from ..mcp import McpManager
 from ..skills import load_skills, skills_prompt
 from ..state import TeamState, render_files, render_history, truncate
 from ..tools.web_search import format_results
@@ -56,15 +57,27 @@ NO_CHANGES = ("The request asks to change the project, but you have not modified
 
 class AgentRunner:
     def __init__(self, orchestrator, root: Path, policy: PermissionPolicy, *, approver: Approver | None = None,
-                 checkpoints: CheckpointStore | None = None, hooks: Hooks | None = None) -> None:
+                 checkpoints: CheckpointStore | None = None, hooks: Hooks | None = None,
+                 mcp: McpManager | None = None) -> None:
         self.orch = orchestrator
         self.root = Path(root).resolve()
         self.policy = policy
         self.approver = approver
         self.checkpoints = checkpoints or CheckpointStore(self.root)
         self.hooks = hooks if hooks is not None else Hooks(self.root)
+        self.mcp = mcp  # None: i server si creano per questa richiesta e si chiudono alla fine
 
-    def run(self, request: str, *, history: list[dict[str, Any]] | None = None,
+    def run(self, request: str, **kwargs) -> Iterator[str]:
+        if self.mcp is not None:
+            yield from self._run(request, self.mcp, **kwargs)
+            return
+        mcp = McpManager(self.root)
+        try:
+            yield from self._run(request, mcp, **kwargs)
+        finally:
+            mcp.close()
+
+    def _run(self, request: str, mcp: McpManager, *, history: list[dict[str, Any]] | None = None,
             files: dict[str, str] | None = None, mode: str | None = None, on_event: EventHandler | None = None,
             cancel: threading.Event | None = None) -> Iterator[str]:
         emit = on_event or (lambda _e: None)
@@ -91,10 +104,11 @@ class AgentRunner:
         memory = read_memory(self.root)
         skills = load_skills(self.root)
         tools = AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
-                           web_search=web_fn, memory=memory, skills=skills, hooks=self.hooks)
+                           web_search=web_fn, memory=memory, skills=skills, hooks=self.hooks, mcp=mcp)
         self.checkpoints.begin(route.request)
         hook_context = "\n".join(filter(None, (self.hooks.session_context, submitted.context)))
-        context = "\n\n".join(p for p in (skills_prompt(skills), project_context(self.root, route.request),
+        context = "\n\n".join(p for p in (skills_prompt(skills), mcp.prompt(),
+                                           project_context(self.root, route.request),
                                            f"# Context from hooks\n{hook_context}" if hook_context else "") if p)
 
         state: TeamState = {

@@ -30,6 +30,7 @@ from rich.table import Table
 
 from .. import health, plugins
 from .. import hooks as hooks_mod
+from .. import mcp as mcp_mod
 from ..agent import CheckpointStore, PermissionPolicy
 from ..agent.context import append_memory, read_memory
 from ..agent.permissions import MODE_LABELS, ApprovalRequest
@@ -37,6 +38,7 @@ from ..agent.permissions import MODES as PERMISSION_MODES
 from ..agent.runner import AgentRunner
 from ..config import load_settings
 from ..hooks import Hooks
+from ..mcp import McpManager
 from ..orchestrator import Orchestrator
 from ..skills import load_skills
 from ..tools.filesystem import Workspace
@@ -79,6 +81,7 @@ COMMANDS = {
     "/skill": "skill disponibili · /skill <nome> [richiesta] per usarne una",
     "/plugin": "plugin (formato Claude Code) · /plugin install <utente/repo> · update · remove",
     "/hooks": "hook attivi (comandi automatici) · /hooks trust attiva quelli del progetto",
+    "/mcp": "server MCP (strumenti esterni) · /mcp reload · /mcp trust",
     "/resume": "riprendi una sessione precedente in questa cartella",
     "/export": "salva la conversazione in Markdown",
     "/clear": "nuova conversazione",
@@ -133,6 +136,7 @@ class TuiApp:
         self._ctrl_c_at = 0.0
         self.custom = extras.custom_commands(self.root)
         self.hooks = Hooks(self.root)
+        self.mcp = McpManager(self.root, configs={})  # si avviano in start_project, dopo il tuo sì
         self._load_prefs()
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
@@ -518,6 +522,8 @@ class TuiApp:
             self._plugin(arg)
         elif cmd in ("/hooks", "/hook"):
             self._hooks(arg)
+        elif cmd == "/mcp":
+            self._mcp(arg)
         elif cmd == "/vio":
             self._pats = getattr(self, "_pats", 0) + 1
             self.say(mascot.PATS[(self._pats - 1) % len(mascot.PATS)], "love")
@@ -570,25 +576,70 @@ class TuiApp:
         self.submit(f"Follow the skill `{skill.name}` for this request.\n\n{skill.read()}\n\n# Request\n{task}",
                     display=f"/skill {arg}")
 
-    def start_hooks(self) -> None:
-        """Chiede il permesso per gli hook del progetto (una volta, o quando cambiano) e lancia SessionStart."""
-        pending = hooks_mod.untrusted(self.root)
-        if pending:
-            self.console.print(f"[bold]Questo progetto ha {len(pending)} hook: comandi che partono da soli.[/]")
-            for hook in pending[:8]:
+    def start_project(self) -> None:
+        """Chiede il sì per hook e server MCP del progetto (una volta, o quando cambiano), poi li avvia."""
+        hooks_pending, mcp_pending = hooks_mod.untrusted(self.root), mcp_mod.untrusted(self.root)
+        if hooks_pending or mcp_pending:
+            what = " e ".join(filter(None, [f"{len(hooks_pending)} hook" if hooks_pending else "",
+                                            f"{len(mcp_pending)} server MCP" if mcp_pending else ""]))
+            self.console.print(f"[bold]Questo progetto ha {what}: programmi che partono da soli.[/]")
+            for hook in hooks_pending[:8]:
                 self.console.print(f"  [dim]{hook.event}[/] {escape(hook.command[:90])} [dim]({hook.source})[/]")
+            for server in mcp_pending[:8]:
+                self.console.print(f"  [dim]MCP {escape(server.name)}[/] {escape(server.describe()[:90])}")
             answer = self._reply("  Li attivo? Solo se ti fidi di questo progetto [s/N] › ")
             if answer.strip().lower() in ("s", "si", "sì", "y", "yes"):
-                hooks_mod.trust(self.root)
+                hooks_mod.allow(self.root)
+                mcp_mod.allow(self.root)
         self.hooks = Hooks(self.root)
         if any(h.event == "SessionStart" and not h.unsupported for h in self.hooks.hooks):
             # in background: alcuni plugin installano pacchetti all'avvio e non devono bloccarti
             threading.Thread(target=self.hooks.start, args=("startup",), daemon=True).start()
+        self._start_mcp()
+
+    def _start_mcp(self) -> None:
+        self.mcp.close()
+        self.mcp = McpManager(self.root)
+        if self.mcp:  # si collegano in background: npx può metterci un po' la prima volta
+            threading.Thread(target=self.mcp.connect_all, daemon=True).start()
+
+    def _mcp(self, arg: str) -> None:
+        c = self.console
+        if arg.lower() in ("reload", "trust"):
+            if arg.lower() == "trust":
+                mcp_mod.allow(self.root)
+            self._start_mcp()
+            self.mcp.connect_all()
+        pending = mcp_mod.untrusted(self.root)
+        if not self.mcp and not pending:
+            c.print("[dim]⎿  Nessun server MCP. Si configurano come in Claude Code: .mcp.json nel progetto o "
+                    "~/.mydevagent/mcp.json (guida: docs/TUI.md)[/]", highlight=False)
+            return
+        table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2), expand=True)
+        for col in ("server", "da", "stato"):
+            table.add_column(col, no_wrap=True)
+        table.add_column("comando / url", no_wrap=True, overflow="ellipsis", ratio=1)
+        for server in self.mcp.servers.values():
+            if server.error:
+                state = "[red]errore[/]"
+            elif server.transport:
+                state = f"[green]✓[/] {len(server.tools)} strumenti"
+            else:
+                state = "[dim]non avviato[/]"
+            table.add_row(f"[{ACCENT}]{escape(server.name)}[/]", escape(server.config.source), state,
+                          escape(server.config.describe()))
+        c.print(table)
+        for server in self.mcp.servers.values():
+            if server.error:
+                c.print(f"[red]⎿  {escape(server.name)}: {escape(server.error[:200])}[/]", highlight=False)
+        if pending:
+            c.print(f"[yellow]⎿  {len(pending)} server del progetto sono spenti: /mcp trust per attivarli[/]")
+        c.print("[dim]L'agente li usa da solo quando servono · /mcp reload li riavvia[/]")
 
     def _hooks(self, arg: str) -> None:
         c = self.console
         if arg.lower() == "trust":
-            hooks_mod.trust(self.root)
+            hooks_mod.allow(self.root)
             self.hooks = Hooks(self.root)
             c.print(f"[green]⏺[/] Hook del progetto attivati ({len(self.hooks.hooks)} hook attivi)")
             return
@@ -658,10 +709,6 @@ class TuiApp:
             table.add_row(f"[{ACCENT}]{escape(p.name)}[/]", escape(source), self._plugin_summary(p),
                           escape(p.description))
         c.print(table)
-        with_mcp = [p.name for p in found.values() if "MCP" in p.features()]
-        if with_mcp:
-            c.print(f"[dim]Server MCP non ancora supportati: {escape(', '.join(with_mcp))}. Il resto funziona.[/]",
-                    highlight=False)
         c.print("[dim]/plugin install <utente/repo | url | cartella> · /plugin update <nome> · "
                 "/plugin remove <nome>[/]", highlight=False)
 
@@ -942,7 +989,7 @@ class TuiApp:
                 if self.agent_mode:
                     extras_private_dir(self.root)
                     runner = AgentRunner(self.orch, self.root, self.policy, approver=approver,
-                                         checkpoints=self.checkpoints, hooks=self.hooks)
+                                         checkpoints=self.checkpoints, hooks=self.hooks, mcp=self.mcp)
                     stream = runner.run(text, history=self.session.history, files=files, mode=mode,
                                         on_event=lambda e: events.put(("event", e)), cancel=cancel)
                 else:
@@ -1042,7 +1089,7 @@ class TuiApp:
         self.banner()
         if self._startup_check:
             self.startup_check()
-        self.start_hooks()
+        self.start_project()
         while True:
             self.console.print()
             try:
@@ -1073,6 +1120,7 @@ class TuiApp:
                     break
                 continue
             self.submit(text)
+        self.mcp.close()
         self.session.save()
         self.console.print(f"[dim]Sessione salvata: {self.session.id} · riprendi con `mydevagent --continue`[/]")
 

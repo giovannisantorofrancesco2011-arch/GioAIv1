@@ -98,6 +98,8 @@ class PermissionPolicy:
             path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     def rule_for(self, tool: str, args: dict[str, Any]) -> str:
+        if tool == "mcp":
+            return f"mcp:{args.get('server', '')}.{args.get('tool', '')}"
         if tool in EDIT_TOOLS:
             return f"edit:{args.get('path', '')}"
         if tool == "bash":
@@ -110,6 +112,8 @@ class PermissionPolicy:
             target = f"edit:{args.get('path', '')}"
         elif tool == "bash":
             target = f"bash:{args.get('command', '')}"
+        elif tool == "mcp":
+            target = self.rule_for(tool, args)
         else:
             target = f"{tool}:"
         return any(fnmatch.fnmatch(target, rule) for rule in self.allow_rules)
@@ -122,7 +126,7 @@ class PermissionPolicy:
         if command and is_dangerous(command):
             return Decision("ask", "comando potenzialmente distruttivo")
         if self.mode == "plan":
-            if tool == "bash" and is_read_only(command):
+            if (tool == "bash" and is_read_only(command)) or (tool == "mcp" and args.get("read_only")):
                 return Decision("allow")
             return Decision("deny", "plan mode: read-only. Describe the plan instead of changing files.")
         if self.mode == "auto":
@@ -137,7 +141,7 @@ class PermissionPolicy:
             if tool == "run_tests" and self._allowed_by_rule(tool, args):
                 return Decision("allow")
             return Decision("ask")
-        return Decision("ask")
+        return Decision("allow" if self._allowed_by_rule(tool, args) else "ask")
 
     def next_mode(self) -> str:
         cycle = ["ask", "auto-edit", "plan"]

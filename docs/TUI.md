@@ -88,6 +88,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/skill` · `/skill <nome> <richiesta>` | skill disponibili · usa una skill per questa richiesta |
 | `/plugin` · `/plugin install <utente/repo>` · `update` · `remove` | plugin nel formato di Claude Code |
 | `/hooks` · `/hooks trust` | hook attivi · attiva quelli del progetto |
+| `/mcp` · `/mcp reload` · `/mcp trust` | server MCP e il loro stato · riavviali · attiva quelli del progetto |
 | `/vio` | saluta (e accarezza) Vio, la mascotte |
 | `/agents` | i 35 agenti (nucleo e ultra) |
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
@@ -155,9 +156,9 @@ i plugin in `.mydevagent/plugins/` del progetto, quelli installati con `/plugin 
 (`~/.mydevagent/plugins/`), **quelli che hai già installato in Claude Code** e le cartelle in
 `MYDEVAGENT_PLUGINS_DIRS`.
 
-Anche gli hook dei plugin funzionano (vedi sotto). Differenze da Claude Code: `.mcp.json` non è ancora
-usato, e `!`comando`` nei comandi non viene eseguito prima dell'invio: lo esegue l'agente con i suoi tool,
-chiedendo il permesso come sempre.
+Funzionano anche gli hook e i server MCP dei plugin (vedi sotto). Differenza da Claude Code: `!`comando``
+nei comandi non viene eseguito prima dell'invio: lo esegue l'agente con i suoi tool, chiedendo il permesso
+come sempre.
 
 ## Hook (comandi automatici)
 Comandi che partono da soli in certi momenti, scritti come in Claude Code. Esempio: formattare ogni file
@@ -190,6 +191,36 @@ plugin, e quelli del progetto. **Quelli del progetto partono solo dopo il tuo s�
 all'avvio (e di nuovo se cambiano): un repository scaricato non deve eseguire comandi da solo sul tuo PC.
 `/hooks` li elenca, `/hooks trust` attiva quelli del progetto, `"disableAllHooks": true` li spegne tutti.
 Gli hook `prompt`, `async`/`asyncRewake` e con `if` non sono ancora eseguiti (in `/hooks` sono in grigio).
+
+## Server MCP (strumenti esterni)
+Con MCP l'agente usa strumenti di altri programmi: GitHub, database, browser, file system, documentazione…
+Si configurano come in Claude Code, in `.mcp.json` nel progetto o in `~/.mydevagent/mcp.json` per tutti i
+progetti:
+
+```json
+{"mcpServers": {
+  "github": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"],
+             "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"}},
+  "docs":   {"type": "http", "url": "https://esempio.com/mcp",
+             "headers": {"Authorization": "Bearer ${DOCS_TOKEN}"}}
+}}
+```
+
+Vengono letti anche i server che usi già con Claude Code (`~/.claude.json`, anche quelli del singolo
+progetto) e quelli dei plugin. `${VAR}` e `${VAR:-predefinito}` prendono i valori dalle variabili
+d'ambiente (o dal `.env`), così i token non finiscono nel file. Come per gli hook, i server scritti nel
+progetto partono solo dopo il tuo sì.
+
+All'avvio MyDevAgent li collega in background. All'agente arriva l'elenco dei server con i nomi degli
+strumenti e un solo tool, `mcp`: prima chiede gli argomenti di un server, poi usa lo strumento. Così anche
+un server con 50 strumenti non riempie il contesto di un modello locale. Ogni uso chiede conferma come un
+comando (con «Sì, e non chiedere più» per quello strumento); in modalità plan sono permessi solo gli
+strumenti che il server dichiara di sola lettura. Negli hook lo strumento si chiama `mcp__server__nome`,
+come in Claude Code.
+
+`/mcp` mostra i server e il loro stato, `/mcp reload` li riavvia, `/mcp trust` attiva quelli del progetto.
+Trasporti: `stdio` (un comando) e `http`. Il vecchio `sse` e il login OAuth non ci sono ancora: per i server
+remoti metti il token negli `headers`.
 
 ## `/ultra-deep`
 35 agenti per i lavori importanti: ricerca web se serve, requisiti, piano con avvocato del diavolo,
