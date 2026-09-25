@@ -13,8 +13,11 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 from ..graph import Cancelled, Team
 from ..hooks import Hooks
@@ -22,6 +25,7 @@ from ..mcp import McpManager
 from ..skills import load_skills, skills_prompt
 from ..state import TeamState, render_files, render_history, truncate
 from ..subagents import SubAgent, load_subagents, subagents_prompt
+from ..tools.web_fetch import UnsafeURLError, fetch_text
 from ..tools.web_search import format_results
 from .checkpoints import CheckpointStore
 from .context import project_context, read_memory
@@ -102,6 +106,7 @@ class AgentRunner:
 
         web = orch.toolbox.ctx.web
         web_fn = (lambda q: format_results(web.search(q))) if settings.tools.web.enabled else None
+        fetch_fn = partial(self._fetch, orch.toolbox.ctx) if settings.tools.web.enabled else None
         memory = read_memory(self.root)
         skills = load_skills(self.root)
         subagents = load_subagents(self.root)
@@ -114,7 +119,8 @@ class AgentRunner:
 
         def tools_for(allowed: set[str] | None = None, **extra) -> AgentTools:
             return AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
-                              web_search=web_fn, memory=memory, skills=skills, hooks=self.hooks, mcp=mcp,
+                              web_search=web_fn, web_fetch=fetch_fn, memory=memory, skills=skills,
+                              hooks=self.hooks, mcp=mcp,
                               allowed=allowed, **extra)
 
         def spawn(agent: SubAgent, prompt: str) -> tuple[str, AgentTools]:
@@ -301,6 +307,15 @@ class AgentRunner:
                                          f"{loop_result.steps if loop_result else 0} passi dell'agente"})
 
     # --------------------------------------------------------------- helpers
+    @staticmethod
+    def _fetch(ctx, url: str) -> str:
+        if not ctx.connectivity.online():
+            return "OFFLINE: cannot fetch pages."
+        try:
+            return fetch_text(url, ctx.settings.tools.web)
+        except (UnsafeURLError, httpx.HTTPError) as exc:
+            return f"ERROR: {type(exc).__name__}: {exc}"
+
     def _rag(self, query: str) -> str:
         """Pezzi di codice rilevanti dall'indice semantico del progetto, se esiste."""
         from ..tools.rag import CodeIndex

@@ -99,6 +99,8 @@ class PermissionPolicy:
             path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     def rule_for(self, tool: str, args: dict[str, Any]) -> str:
+        if tool == "web_fetch":  # per sito, come WebFetch(domain:…) in Claude Code
+            return f"web_fetch:{args.get('host', '')}"
         if tool == "mcp":
             return f"mcp:{args.get('server', '')}.{args.get('tool', '')}"
         if tool in EDIT_TOOLS:
@@ -113,7 +115,7 @@ class PermissionPolicy:
             target = f"edit:{args.get('path', '')}"
         elif tool == "bash":
             target = f"bash:{args.get('command', '')}"
-        elif tool == "mcp":
+        elif tool in ("mcp", "web_fetch"):
             target = self.rule_for(tool, args)
         else:
             target = f"{tool}:"
@@ -126,6 +128,8 @@ class PermissionPolicy:
         command = str(args.get("command", "")) if tool == "bash" else ""
         if command and is_dangerous(command):
             return Decision("ask", "comando potenzialmente distruttivo")
+        if tool == "web_fetch" and self.mode != "auto":  # leggere una pagina va bene anche in plan, chiedendo
+            return Decision("allow" if self._allowed_by_rule(tool, args) else "ask")
         if self.mode == "plan":
             if (tool == "bash" and is_read_only(command)) or (tool == "mcp" and args.get("read_only")):
                 return Decision("allow")

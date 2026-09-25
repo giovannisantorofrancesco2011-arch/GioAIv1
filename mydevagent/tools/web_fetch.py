@@ -48,6 +48,11 @@ def html_to_text(raw: str) -> str:
 
 
 def fetch(url: str, cfg: WebConfig) -> str:
+    return fetch_text(url, cfg)[: cfg.max_page_chars]
+
+
+def fetch_text(url: str, cfg: WebConfig) -> str:
+    """Tutto il testo della pagina (l'agente lo legge a pezzi con offset)."""
     check_url(url, cfg.allow_private_urls)
     key = os.environ.get("FIRECRAWL_API_KEY")
     if key:
@@ -61,7 +66,7 @@ def fetch(url: str, cfg: WebConfig) -> str:
             resp.raise_for_status()
             markdown = resp.json().get("data", {}).get("markdown", "")
             if markdown:
-                return markdown[: cfg.max_page_chars]
+                return markdown
         except httpx.HTTPError:
             pass  # fallback al fetch diretto
     # redirect gestiti a mano: ogni hop viene ricontrollato contro l'SSRF
@@ -78,8 +83,7 @@ def fetch(url: str, cfg: WebConfig) -> str:
         resp.raise_for_status()
     content_type = resp.headers.get("content-type", "")
     body = resp.text
-    text = html_to_text(body) if "html" in content_type else body
-    return text[: cfg.max_page_chars]
+    return html_to_text(body) if "html" in content_type else body
 
 
 @tool(

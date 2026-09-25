@@ -11,6 +11,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from ..graph import Cancelled
 from ..hooks import Hooks
@@ -22,6 +23,7 @@ from .checkpoints import CheckpointStore
 from .permissions import EDIT_TOOLS, ApprovalRequest, Approver, PermissionPolicy, is_dangerous
 
 MAX_RESULT_CHARS = 8000
+WEB_PAGE_CHARS = 6000  # un pezzo di pagina web: sotto MAX_RESULT_CHARS, così non viene tagliato a metà
 DEFAULT_READ_LINES = 250
 EventHandler = Callable[[dict[str, Any]], None]
 Spawn = Callable[["SubAgent", str], "tuple[str, AgentTools]"]
@@ -58,6 +60,11 @@ SPECS: list[dict[str, Any]] = [
          "required": ["todos"]}},
     {"name": "web_search", "description": "Search the web for up-to-date docs, versions, errors (only online).",
      "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "web_fetch", "description": "Read a web page (docs, issues, changelogs) as text. Long pages come in "
+     "parts: call again with the given offset to read more.",
+     "parameters": {"type": "object", "properties": {
+         "url": {"type": "string"}, "offset": {"type": "integer", "description": "character to start from"}},
+         "required": ["url"]}},
     {"name": "mcp", "description": "Use an external MCP server (see the MCP servers list). With only `server`, "
      "list its tools and their arguments; with `tool` and `arguments`, call one.",
      "parameters": {"type": "object", "properties": {
@@ -120,6 +127,7 @@ class AgentTools:
     def __init__(self, root: Path, policy: PermissionPolicy, checkpoints: CheckpointStore,
                  approver: Approver | None = None, emit: EventHandler | None = None,
                  web_search: Callable[[str], str] | None = None, memory: str = "",
+                 web_fetch: Callable[[str], str] | None = None,
                  bash_timeout: int = 120, skills: dict[str, Skill] | None = None,
                  hooks: Hooks | None = None, mcp: McpManager | None = None,
                  subagents: dict[str, SubAgent] | None = None, spawn: Spawn | None = None,
@@ -131,6 +139,7 @@ class AgentTools:
         self.approver = approver
         self.emit = emit or (lambda _e: None)
         self.web_search_fn = web_search
+        self.web_fetch_fn = web_fetch
         self.memory = memory
         self.bash_timeout = bash_timeout
         self.skills = skills or {}
@@ -140,6 +149,7 @@ class AgentTools:
         self.spawn = spawn  # esegue un sotto-agente: lo fornisce il runner, che ha il modello
         self.allowed = allowed  # None = tutti i tool (i sotto-agenti possono averne meno)
         self.todos: list[dict[str, str]] = []
+        self._page = ("", "")  # (url, testo) dell'ultima pagina letta con web_fetch
         self.changed: list[str] = []
         self.read_paths: set[str] = set()
         self.last_test: tuple[str, bool, str] | None = None  # (comando, ok, output)
@@ -149,6 +159,7 @@ class AgentTools:
     # ----------------------------------------------------------------- spec
     def specs(self) -> list[dict[str, Any]]:
         specs = [s for s in SPECS if (s["name"] != "web_search" or self.web_search_fn)
+                 and (s["name"] != "web_fetch" or self.web_fetch_fn)
                  and (s["name"] != "skill" or self.skills) and (s["name"] != "mcp" or self.mcp)
                  and (s["name"] != "task" or (self.subagents and self.spawn))
                  and (self.allowed is None or s["name"] in self.allowed)]
@@ -403,6 +414,29 @@ class AgentTools:
         self.emit({"type": "todo", "todos": self.todos})
         done = sum(t["status"] == "completed" for t in self.todos)
         return f"todo list updated ({done}/{len(self.todos)} completed)"
+
+    def _t_web_fetch(self, url: str, offset: int = 0, prompt: str = "") -> str:
+        # `prompt` è il campo di WebFetch in Claude Code: qui la pagina arriva intera, a pezzi
+        if not self.web_fetch_fn:
+            return "ERROR: web fetch not available (offline mode?)."
+        url = url.strip() if "://" in url else "https://" + url.strip()  # «docs.python.org/3» va bene
+        host = (urlparse(url).hostname or "").lower()
+        if not re.fullmatch(r"[\w.-]+", host):  # niente «*»: il permesso «sempre» vale per quel sito
+            return f"ERROR: not a valid web address: {url}"
+        denied = self._authorize("web_fetch", {"url": url, "host": host}, f"Fetch({url})")
+        if denied:
+            return denied
+        start = max(0, int(offset or 0))
+        if start == 0 or self._page[0] != url:  # i pezzi successivi dalla stessa copia della pagina
+            self._page = (url, self.web_fetch_fn(url))
+        text = self._page[1]
+        if text.startswith(("OFFLINE:", "ERROR:")):  # pagina non letta: niente «N characters»
+            self._page = ("", "")
+            return text
+        part = text[start:start + WEB_PAGE_CHARS]
+        rest = len(text) - start - len(part)
+        more = f"\n\n… {rest} more characters: call web_fetch again with offset={start + len(part)}" if rest > 0 else ""
+        return f"{url} ({len(text)} characters)\n{part}{more}" if part else f"{url}: no more text (offset {start})"
 
     def _t_web_search(self, query: str) -> str:
         if not self.web_search_fn:

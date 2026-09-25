@@ -35,7 +35,8 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 ## Modalità agente (default) e modalità chat
 - **agente** (`/agent`): il team lavora **direttamente sui file** della cartella in cui hai aperto
   MyDevAgent, con dei tool: `read_file`, `list_files`, `grep`, `edit_file` (sostituzione esatta di un
-  pezzo di testo), `write_file`, `bash`, `run_tests`, `todo_write`, `web_search`.
+  pezzo di testo), `write_file`, `bash`, `run_tests`, `todo_write`, `web_search`,
+  `web_fetch` (legge una pagina web: la prima volta per ogni sito chiede il permesso, anche in `plan`).
 - **chat** (`/chat`): risponde con il codice senza toccare i file; `/apply` lo salva dopo il diff.
 
 ## Permessi (come Claude Code) — `Shift+Tab` per cambiarli
@@ -94,6 +95,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/files` · `/cost` · `/think` | allegati · token e tempo · mostra il ragionamento |
 | `/index` | indicizza il progetto per la ricerca semantica (di solito lo fa da solo in background) |
 | `/doctor` | verifica backend, modelli, rete, sandbox |
+| `/update` | aggiorna MyDevAgent (`git pull`, dipendenze se cambiate); all'avvio Vio ti avvisa delle novità |
 | `/theme [dark\|light]` | tema dei diff e del codice |
 | `/resume` · `/export` · `/clear` · `/exit` | sessioni, export Markdown, nuova conversazione, esci |
 

@@ -129,6 +129,27 @@ def test_always_rule_is_persisted(project):
     assert policy.decide("bash", {"command": "python -V"}).action == "allow"
 
 
+def test_web_fetch_pages_and_asks_once_per_site(project):
+    asked, fetched = [], []
+    page = "x" * 7000 + "FINE"
+    tools = AgentTools(project, PermissionPolicy(mode="plan", root=project), CheckpointStore(project),
+                       approver=lambda req: asked.append(req) or ("always", ""),
+                       web_fetch=lambda url: fetched.append(url) or page)
+    first = tools.execute("web_fetch", {"url": "docs.python.org/3/"})
+    assert "7004 characters" in first and "offset=6000" in first and "FINE" not in first
+    assert asked[0].args["host"] == "docs.python.org"
+    assert "FINE" in tools.execute("web_fetch", {"url": "https://docs.python.org/3/", "offset": 6000})
+    assert len(asked) == 1 and len(fetched) == 1  # «sempre» vale per il sito; il secondo pezzo dalla stessa copia
+    tools.execute("web_fetch", {"url": "https://docs.python.org/3/x"})
+    assert len(asked) == 1 and len(fetched) == 2
+    tools.execute("web_fetch", {"url": "https://docs.python.org.evil.com/"})
+    assert len(asked) == 2  # un altro sito: chiede di nuovo
+    assert tools.execute("web_fetch", {"url": "https://*/"}).startswith("ERROR")
+    offline = make_tools(project)
+    assert "web_fetch" not in [s["name"] for s in offline.specs()]
+    assert offline.execute("web_fetch", {"url": "https://example.com"}).startswith("ERROR")
+
+
 def test_detect_tests_and_run(project):
     assert detect_test_command(project) == "python -m pytest -q"
     assert detect_test_command(project, "## Comandi\n- test: `make check`") == "make check"

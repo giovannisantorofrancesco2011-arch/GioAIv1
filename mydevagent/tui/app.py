@@ -31,6 +31,7 @@ from rich.table import Table
 from .. import health, plugins
 from .. import hooks as hooks_mod
 from .. import mcp as mcp_mod
+from .. import update as update_mod
 from ..agent import CheckpointStore, PermissionPolicy
 from ..agent.context import append_memory, read_memory
 from ..agent.permissions import MODE_LABELS, ApprovalRequest
@@ -83,6 +84,7 @@ COMMANDS = {
     "/plugin": "plugin (formato Claude Code) · /plugin install <utente/repo> · update · remove",
     "/hooks": "hook attivi (comandi automatici) · /hooks trust attiva quelli del progetto",
     "/mcp": "server MCP (strumenti esterni) · /mcp reload · /mcp trust",
+    "/update": "aggiorna MyDevAgent all'ultima versione (modelli e impostazioni restano)",
     "/resume": "riprendi una sessione precedente in questa cartella",
     "/export": "salva la conversazione in Markdown",
     "/clear": "nuova conversazione",
@@ -381,6 +383,10 @@ class TuiApp:
             if req.diff:
                 c.print(render_diff(req.diff, max_lines=80))
             question = f"Applicare la modifica a {path}?"
+        elif req.tool == "web_fetch":
+            question = f"Leggere le pagine di {req.args.get('host', 'questo sito')}?"
+        elif req.tool == "mcp":
+            question = f"Usare lo strumento MCP {req.args.get('server')}.{req.args.get('tool')}?"
         else:  # comando già mostrato dalla riga ⏺ Bash(...)/Test(...) del tool
             if req.dangerous:
                 c.print("  [red]⚠ comando potenzialmente distruttivo: controlla bene[/]")
@@ -539,6 +545,8 @@ class TuiApp:
             self._hooks(arg)
         elif cmd == "/mcp":
             self._mcp(arg)
+        elif cmd == "/update":
+            self._update()
         elif cmd == "/vio":
             self._pats = getattr(self, "_pats", 0) + 1
             self.say(mascot.PATS[(self._pats - 1) % len(mascot.PATS)], "love")
@@ -590,6 +598,27 @@ class TuiApp:
         self.say(f"Uso la skill {skill.name}.", "think")
         self.submit(f"Follow the skill `{skill.name}` for this request.\n\n{skill.read()}\n\n# Request\n{task}",
                     display=f"/skill {arg}")
+
+    def _update(self) -> None:
+        with self.console.status(f"[{ACCENT}]Aggiorno MyDevAgent…[/]"):
+            result = update_mod.update()
+        color = "green" if result.ok else "red"
+        self.console.print(f"[{color}]⏺[/] {escape(result.message)}", highlight=False)
+        for change in result.changes:
+            self.console.print(f"  [dim]• {escape(change)}[/]", highlight=False)
+        if result.restart:
+            self.console.print(f"[{ACCENT}]⎿  Riavvia MyDevAgent per usare la nuova versione (/exit e poi riaprilo)[/]")
+            self.say("Mi sono aggiornata! Riavviami per vedere le novità.", "love")
+        elif result.ok:
+            self.say("Sono già aggiornata!", "done")
+        else:
+            self.say("Non sono riuscita ad aggiornarmi: leggi qui sopra.", "error")
+
+    def _check_updates(self) -> None:
+        """In background all'avvio: se su GitHub ci sono novità, Vio lo dice."""
+        count = update_mod.available()
+        if count:
+            self.say(f"Ci sono {count} novità di MyDevAgent: scrivi /update per averle.", "love")
 
     def start_project(self) -> None:
         """Chiede il sì per hook e server MCP del progetto (una volta, o quando cambiano), poi li avvia."""
@@ -1107,6 +1136,8 @@ class TuiApp:
         if self._startup_check:
             self.startup_check()
         self.start_project()
+        if self._startup_check:
+            threading.Thread(target=self._check_updates, daemon=True).start()
         while True:
             self.console.print()
             try:

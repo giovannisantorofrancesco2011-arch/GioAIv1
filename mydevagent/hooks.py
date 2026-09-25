@@ -34,7 +34,8 @@ TOOL_EVENTS = ("PreToolUse", "PostToolUse")
 # i nomi dei tool di Claude Code, così i matcher dei plugin ("Edit|Write", "Bash") funzionano anche qui
 CLAUDE_NAMES = {"bash": "Bash", "run_tests": "Bash", "edit_file": "Edit", "write_file": "Write",
                 "read_file": "Read", "grep": "Grep", "list_files": "Glob", "web_search": "WebSearch",
-                "todo_write": "TodoWrite", "skill": "Skill", "task": "Task"}
+                "todo_write": "TodoWrite", "skill": "Skill", "task": "Task",
+                "web_fetch": "WebFetch"}
 
 
 @dataclass

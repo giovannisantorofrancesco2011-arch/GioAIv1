@@ -28,7 +28,7 @@ from .skills import short, split_frontmatter
 TOOL_NAMES = {"Read": ["read_file"], "Grep": ["grep"], "Glob": ["list_files"], "LS": ["list_files"],
               "Bash": ["bash", "run_tests"], "Edit": ["edit_file"], "MultiEdit": ["edit_file"],
               "Write": ["write_file"], "NotebookEdit": ["edit_file"], "NotebookRead": ["read_file"],
-              "WebSearch": ["web_search"], "WebFetch": ["web_search"], "TodoWrite": ["todo_write"],
+              "WebSearch": ["web_search"], "WebFetch": ["web_fetch"], "TodoWrite": ["todo_write"],
               "Skill": ["skill"]}
 
 

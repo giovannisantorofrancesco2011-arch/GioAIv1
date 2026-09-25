@@ -126,6 +126,22 @@ All'apertura MyDevAgent controlla da solo il server dei modelli e i modelli del 
 
 `mydevagent doctor` (o `/doctor` nella UI) mostra tutto in una volta: backend, modelli, hardware, rete, sandbox.
 
+### Aggiornare
+Nella UI scrivi `/update` (o `mydevagent update` dal terminale): scarica le novità con `git pull`, aggiorna
+le dipendenze solo se sono cambiate e ti elenca cosa c'è di nuovo; poi riavvia MyDevAgent. Modelli, `.env`,
+memoria e sessioni restano come sono. All'avvio Vio ti avvisa quando su GitHub ci sono novità.
+
+Se avevi scaricato lo zip invece di clonare, collega la cartella a GitHub una volta sola (`.env` e `.venv`
+restano):
+
+```
+cd <cartella di MyDevAgent>
+git init
+git remote add origin https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent.git
+git fetch origin claude/gracious-mayer-mt8l9b
+git checkout -f -B claude/gracious-mayer-mt8l9b origin/claude/gracious-mayer-mt8l9b
+```
+
 ## Uso
 
 ```bash

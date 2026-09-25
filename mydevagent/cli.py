@@ -315,6 +315,20 @@ def bench(
 
 
 @app.command()
+def update() -> None:
+    """Aggiorna MyDevAgent (git pull; dipendenze solo se cambiate). Modelli e impostazioni restano."""
+    from .update import update as run_update
+
+    with console.status("Aggiorno MyDevAgent…"):
+        result = run_update()
+    console.print(f"[{'green' if result.ok else 'red'}]{'✓' if result.ok else '✗'}[/] {escape(result.message)}")
+    for change in result.changes:
+        console.print(f"  [dim]• {escape(change)}[/]")
+    if not result.ok:
+        raise typer.Exit(1)
+
+
+@app.command()
 def doctor(profile: str = typer.Option(None, "--profile", "-p")) -> None:
     """Verifica backend LLM, modelli, connessione, ricerca web, sandbox e indice RAG."""
     import os
