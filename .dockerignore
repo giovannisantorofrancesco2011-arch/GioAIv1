@@ -1,0 +1,9 @@
+.git
+.venv
+venv
+**/__pycache__
+.mydevagent
+finetune
+tests
+*.gguf
+.env

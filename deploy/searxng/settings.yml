@@ -1,0 +1,9 @@
+# SearXNG minimale per MyDevAgent: abilita l'output JSON usato dal Research Agent
+use_default_settings: true
+server:
+  secret_key: "cambia-questa-chiave-con-una-stringa-casuale"
+  limiter: false
+  image_proxy: false
+search:
+  safe_search: 0
+  formats: [html, json]

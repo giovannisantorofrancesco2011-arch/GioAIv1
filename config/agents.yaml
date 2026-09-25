@@ -1,0 +1,239 @@
+# =====================================================================
+#  I 15 agenti di MyDevAgent
+#
+#  stage:     research | plan | specialist | test | gate | docs | final
+#  tier:      main | fast | reasoning | vision  (vedi profiles in settings.yaml)
+#  reads:     sezioni della blackboard che l'agente riceve (meno sezioni = meno token)
+#             request, history, files, rag, research, plan, artifacts, test_report,
+#             issues, image_notes
+#  tools:     tool nativi utilizzabili (solo se il profilo ha native_tools: true);
+#             in ogni caso l'orchestratore fornisce ricerca, RAG e sandbox in modo deterministico
+#  keywords:  parole (IT/EN) usate dal router per attivare l'agente
+#  aliases:   menzioni esplicite, es. "@sec" o "@security"
+# =====================================================================
+
+agents:
+  - id: 1
+    key: architect
+    name: "Architetto del Codice"
+    stage: plan
+    role: "High-level planning, decomposizione del problema, scelte architetturali."
+    goal: "Produrre un piano breve, verificabile e con criteri di accettazione, assegnando il lavoro agli specialisti."
+    prompt: 01_architect.md
+    tier: reasoning
+    max_tokens: 700
+    temperature: 0.2
+    reads: [request, history, files, rag, research, image_notes]
+    tools: [rag_search, read_file, list_dir, grep]
+    keywords: [architettura, architecture, design, progetta, struttura, structure, microservizi, microservices, monorepo, pattern, modulare, scalabile, scalable, system design]
+    aliases: [arch, architect]
+
+  - id: 2
+    key: algorithms
+    name: "Algoritmi & Strutture Dati"
+    stage: specialist
+    role: "Algoritmi, strutture dati, complessità computazionale, correttezza formale."
+    goal: "Scegliere l'algoritmo ottimale, dimostrarne correttezza e complessità, implementarlo senza errori off-by-one."
+    prompt: 02_algorithms.md
+    tier: main
+    max_tokens: 1400
+    temperature: 0.1
+    reads: [request, history, files, plan, research, issues]
+    tools: [run_code]
+    keywords: [algoritmo, algorithm, complessità, complexity, big-o, "o(n", grafo, graph, albero, tree, heap, dijkstra, dynamic programming, programmazione dinamica, ricorsione, recursion, sort, ordinamento, ricerca binaria, binary search, leetcode, struttura dati, data structure, trie, hash]
+    aliases: [algo, algorithms]
+
+  - id: 3
+    key: language
+    name: "Linguaggi & Framework"
+    stage: specialist
+    role: "Scelta di linguaggio/stack e codice idiomatico (Python, TypeScript, JS, Go, Rust, Java, C#, C++, Kotlin, Swift...)."
+    goal: "Scrivere codice idiomatico, moderno e coerente con lo stack del progetto; agente di default quando nessun dominio è chiaro."
+    prompt: 03_language.md
+    tier: main
+    max_tokens: 1600
+    temperature: 0.2
+    reads: [request, history, files, rag, plan, research, issues]
+    tools: [rag_search, read_file, web_search]
+    keywords: [python, typescript, javascript, golang, " go ", rust, java, kotlin, "c#", "c++", swift, ruby, php, script, funzione, function, classe, class, libreria, library, idiomatic, idiomatico, converti, convert, porting, cli]
+    aliases: [lang, language]
+
+  - id: 4
+    key: debug_test
+    name: "Debugging & Testing"
+    stage: test
+    role: "Riproduzione bug, root-cause analysis, test unitari/integrazione, esecuzione in sandbox."
+    goal: "Trovare la causa reale dei bug e dimostrare con test eseguibili che il codice funziona."
+    prompt: 04_debug_test.md
+    tier: main
+    max_tokens: 1400
+    temperature: 0.1
+    reads: [request, history, files, plan, artifacts, issues, test_report, image_notes]
+    tools: [run_code, read_file, grep, git_diff, git_log]
+    keywords: [bug, errore, error, eccezione, exception, traceback, stack trace, crash, non funziona, doesn't work, not working, debug, test, pytest, jest, vitest, unit test, fix, fallisce, fails, failing]
+    aliases: [debug, test, tests]
+
+  - id: 5
+    key: frontend
+    name: "Frontend"
+    stage: specialist
+    role: "UI web e mobile (React, Next.js, Vue, Svelte, Tailwind, React Native), accessibilità, stato, UX."
+    goal: "Componenti accessibili, tipizzati, responsive e performanti, fedeli ad eventuali mockup."
+    prompt: 05_frontend.md
+    tier: main
+    max_tokens: 1800
+    temperature: 0.2
+    reads: [request, history, files, rag, plan, research, issues, image_notes]
+    tools: [rag_search, read_file, web_search]
+    keywords: [react, next.js, nextjs, vue, svelte, angular, tailwind, css, html, ui, ux, componente, component, frontend, front-end, pagina, page, form, bottone, button, layout, responsive, react native, expo, shadcn, vite]
+    aliases: [fe, frontend, ui]
+
+  - id: 6
+    key: backend
+    name: "Backend & API"
+    stage: specialist
+    role: "Servizi e API (FastAPI, Django, Node/Express/NestJS, Go, .NET, Spring), REST/GraphQL/gRPC, auth, code/queue."
+    goal: "API robuste con contratti chiari, validazione, gestione errori, idempotenza e osservabilità."
+    prompt: 06_backend.md
+    tier: main
+    max_tokens: 1800
+    temperature: 0.2
+    reads: [request, history, files, rag, plan, research, issues]
+    tools: [rag_search, read_file, web_search]
+    keywords: [api, rest, graphql, grpc, endpoint, fastapi, django, flask, express, nestjs, node, spring, ".net", asp.net, backend, back-end, server, webhook, websocket, jwt, oauth, auth, autenticazione, queue, coda, celery, kafka, rabbitmq, microservizio]
+    aliases: [be, backend, api]
+
+  - id: 7
+    key: database
+    name: "Database & ORM"
+    stage: specialist
+    role: "Modellazione dati, SQL, NoSQL, migrazioni, indici, ORM (Prisma, SQLAlchemy, Drizzle, TypeORM, EF Core)."
+    goal: "Schemi normalizzati quando serve, query corrette e indicizzate, migrazioni sicure e reversibili."
+    prompt: 07_database.md
+    tier: main
+    max_tokens: 1400
+    temperature: 0.1
+    reads: [request, history, files, rag, plan, research, issues]
+    tools: [rag_search, read_file]
+    keywords: [database, db, sql, postgres, postgresql, mysql, sqlite, mongodb, redis, query, schema, tabella, table, migrazione, migration, indice, index, orm, prisma, sqlalchemy, drizzle, typeorm, "ef core", join, transazione, transaction]
+    aliases: [db, database, sql]
+
+  - id: 8
+    key: devops
+    name: "DevOps & CI/CD"
+    stage: specialist
+    role: "Container, CI/CD, infrastruttura come codice, deploy, osservabilità."
+    goal: "Pipeline e infrastruttura riproducibili, sicure e minimali."
+    prompt: 08_devops.md
+    tier: main
+    max_tokens: 1400
+    temperature: 0.1
+    reads: [request, history, files, rag, plan, research, issues]
+    tools: [read_file, web_search]
+    keywords: [docker, dockerfile, docker compose, kubernetes, k8s, helm, terraform, ansible, ci/cd, cicd, github actions, gitlab, pipeline, deploy, nginx, aws, gcp, azure, vercel, cloudflare, systemd, monitoring, prometheus, grafana, logging]
+    aliases: [devops, ops, ci]
+
+  - id: 9
+    key: security
+    name: "Security & Best Practices"
+    stage: gate
+    role: "Sicurezza applicativa (OWASP Top 10, secret, injection, authn/authz, supply chain, crittografia)."
+    goal: "Individuare vulnerabilità reali e proporre fix concreti; può bloccare la consegna."
+    prompt: 09_security.md
+    tier: reasoning
+    max_tokens: 700
+    temperature: 0.0
+    reads: [request, plan, artifacts, research]
+    tools: [web_search, grep]
+    keywords: [sicurezza, security, secure, sicuro, vulnerabilità, vulnerability, cve, owasp, xss, csrf, sql injection, injection, crittografia, encryption, hash password, secret, segreti, permessi, permissions, audit]
+    aliases: [sec, security]
+
+  - id: 10
+    key: performance
+    name: "Performance & Optimization"
+    stage: gate
+    role: "Profiling, complessità, memoria, I/O, caching, concorrenza, query lente, bundle size."
+    goal: "Rendere il codice misurabilmente più veloce senza sacrificare leggibilità o correttezza."
+    prompt: 10_performance.md
+    tier: reasoning
+    max_tokens: 700
+    temperature: 0.0
+    reads: [request, plan, artifacts, test_report]
+    tools: [run_code]
+    keywords: [performance, prestazioni, lento, slow, veloce, fast, ottimizza, optimize, optimise, latenza, latency, memoria, memory, cache, caching, profiling, benchmark, concorrenza, concurrency, async, parallel, throughput]
+    aliases: [perf, performance]
+
+  - id: 11
+    key: research
+    name: "Research Agent"
+    stage: research
+    role: "Ricerca web in tempo reale (docs ufficiali, versioni, changelog, CVE, issue) con fonti citate."
+    goal: "Fornire fatti aggiornati e verificati con URL; in offline dichiarare il limite e usare la conoscenza locale."
+    prompt: 11_research.md
+    tier: main
+    max_tokens: 700
+    temperature: 0.0
+    reads: [request, history, research]
+    tools: [web_search, web_fetch, rag_search]
+    keywords: [cerca online, cerca sul web, search the web, web search, ricerca web, "@web", ultima versione, latest version, latest, più recente, aggiornato, up to date, up-to-date, changelog, release notes, documentazione ufficiale, official docs, novità, "what's new", deprecato, deprecated, breaking change, "2025", "2026", cve]
+    aliases: [research, web, search]
+
+  - id: 12
+    key: reviewer
+    name: "Code Reviewer & Refactor"
+    stage: gate
+    role: "Code review del risultato, leggibilità, design, refactor mirati, coerenza col piano."
+    goal: "Decidere APPROVE/REVISE con feedback azionabili e prioritizzati."
+    prompt: 12_reviewer.md
+    tier: reasoning
+    max_tokens: 700
+    temperature: 0.0
+    reads: [request, plan, artifacts, test_report, issues]
+    tools: [git_diff, read_file]
+    keywords: [review, revisiona, refactor, refactoring, pulisci, clean code, clean up, migliora, improve, leggibilità, readability, solid, code smell]
+    aliases: [review, reviewer, refactor]
+
+  - id: 13
+    key: docs
+    name: "Documentation & Commenti"
+    stage: docs
+    role: "Docstring, README, commenti essenziali, changelog, esempi d'uso."
+    goal: "Documentazione minima ma completa: come si usa, come si configura, perché certe scelte."
+    prompt: 13_docs.md
+    tier: main
+    max_tokens: 900
+    temperature: 0.2
+    reads: [request, plan, artifacts]
+    tools: [read_file]
+    keywords: [documentazione, documenta, document, docstring, readme, commenti, comments, jsdoc, changelog, spiega il codice, explain the code, tutorial]
+    aliases: [docs, doc]
+
+  - id: 14
+    key: edge_cases
+    name: "Edge Case & Robustness"
+    stage: gate
+    role: "Casi limite, input invalidi, errori, concorrenza, timezone, unicode, limiti di risorse."
+    goal: "Trovare gli input che rompono il codice e proporre gestione e test mirati."
+    prompt: 14_edge_cases.md
+    tier: reasoning
+    max_tokens: 600
+    temperature: 0.0
+    reads: [request, plan, artifacts, test_report]
+    tools: [run_code]
+    keywords: [edge case, casi limite, robusto, robust, robustezza, robustness, input invalido, invalid input, null, overflow, race condition, timezone, unicode, validazione, validation, resilienza, resilience, retry]
+    aliases: [edge, edge_cases, robustness]
+
+  - id: 15
+    key: formatter
+    name: "Output Formatter & Final Delivery"
+    stage: final
+    role: "Consegna finale pulita e pronta all'uso."
+    goal: "Unire il lavoro del team in un'unica risposta concisa con codice completo, comandi e note essenziali."
+    prompt: 15_formatter.md
+    tier: main
+    max_tokens: 3000
+    temperature: 0.1
+    reads: [request, history, plan, artifacts, test_report, issues, research]
+    tools: []
+    keywords: []
+    aliases: [format, formatter]
