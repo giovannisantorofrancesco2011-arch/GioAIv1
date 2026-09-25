@@ -213,6 +213,23 @@ def test_runner_balanced_reviews_real_diff_and_fixes(project, settings):
     assert llm.calls[0]["role"].startswith("Architect")
 
 
+def test_learning_mode_prompt_and_review(project, settings):
+    llm = ScriptedLLM(steps=["Tocca a te: scrivi il corpo di `add` dove trovi TODO(tu)."])
+    runner = AgentRunner(Orchestrator(settings, llm=llm), project, PermissionPolicy(mode="auto", root=project),
+                         learn=True)
+    "".join(runner.run("/fast spiegami come funziona add"))
+    system = [c for c in llm.calls if c.get("role") == "agent"][0]["messages"][0]["content"]
+    assert "Learning mode" in system and "TODO(tu)" in system
+
+    class Board:  # i reviewer: un TODO(tu) è l'esercizio dell'utente, non un problema
+        def gate_node(self, payload):
+            return {"issues": [{"agent": "reviewer", "severity": "BLOCKER", "text": "TODO(tu) non implementato"},
+                               {"agent": "reviewer", "severity": "MAJOR", "text": "manca la validazione"}]}
+
+    blocking = runner._review(Board(), {}, ["reviewer"], "", make_tools(project), "", 0)
+    assert [i["text"] for i in blocking] == ["manca la validazione"]
+
+
 def test_runner_fast_mode_single_agent(project, settings):
     llm = ScriptedLLM(steps=["La funzione add somma due numeri."])
     runner = AgentRunner(Orchestrator(settings, llm=llm), project, PermissionPolicy(mode="ask", root=project))

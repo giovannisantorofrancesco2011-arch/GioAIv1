@@ -55,6 +55,16 @@ def wants_changes(request: str) -> bool:
 EventHandler = Callable[[dict[str, Any]], None]
 # i nomi dei permessi di Claude Code, per il campo permission_mode degli hook
 PERMISSION_MODES = {"ask": "default", "auto-edit": "acceptEdits", "plan": "plan", "auto": "bypassPermissions"}
+LEARN_PROMPT = """# Learning mode: the user is learning to program
+- Before changing code, say in one or two simple sentences what you are about to do and why.
+- Leave ONE small, meaningful piece for the user to write (a condition, a loop or a function body of 3-10 lines):
+  write everything else, and where their code goes put a `TODO(tu):` comment with a hint of what to write (not
+  the solution). Then tell them the file and what to write. Tests that exercise their part may fail until they
+  write it: that is expected, say so instead of filling it in. Skip the exercise for urgent bug fixes or when
+  the user asks you to write everything.
+- End with a short "💡 Da sapere" section: 2-3 bullet points that explain the concepts you used, in simple words.
+- When the user says they wrote their part, read it, say what is right and explain gently what to fix, without
+  rewriting it for them unless they ask."""
 NO_CHANGES = ("The request asks to change the project, but you have not modified any file. Apply the changes now "
               "with edit_file / write_file, run the tests, then give your final answer. If you believe no change is "
               "needed, explain why in one line.")
@@ -63,7 +73,7 @@ NO_CHANGES = ("The request asks to change the project, but you have not modified
 class AgentRunner:
     def __init__(self, orchestrator, root: Path, policy: PermissionPolicy, *, approver: Approver | None = None,
                  checkpoints: CheckpointStore | None = None, hooks: Hooks | None = None,
-                 mcp: McpManager | None = None) -> None:
+                 mcp: McpManager | None = None, learn: bool = False) -> None:
         self.orch = orchestrator
         self.root = Path(root).resolve()
         self.policy = policy
@@ -71,6 +81,7 @@ class AgentRunner:
         self.checkpoints = checkpoints or CheckpointStore(self.root)
         self.hooks = hooks if hooks is not None else Hooks(self.root)
         self.mcp = mcp  # None: i server si creano per questa richiesta e si chiudono alla fine
+        self.learn = learn  # modalità impara: spiega e lascia all'utente un pezzo da scrivere
 
     def run(self, request: str, **kwargs) -> Iterator[str]:
         if self.mcp is not None:
@@ -115,7 +126,8 @@ class AgentRunner:
                                                 project_context(self.root, route.request),
                                                 f"# Context from hooks\n{hook_context}" if hook_context else "")
                                      if p)
-        context = "\n\n".join(p for p in (subagents_prompt(subagents), base_context) if p)
+        context = "\n\n".join(p for p in (subagents_prompt(subagents), base_context,
+                                            LEARN_PROMPT if self.learn else "") if p)
 
         def tools_for(allowed: set[str] | None = None, **extra) -> AgentTools:
             return AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
@@ -208,7 +220,8 @@ class AgentRunner:
                 issues = "\n".join(f"- [{i['severity']}] ({i['agent']}) {i['text']}" for i in blocking)
                 result = loop.follow_up(
                     "The reviewers found these problems in your changes:\n" + issues +
-                    "\nFix them with the tools, re-run the tests, then give your final answer.")
+                    "\nFix them with the tools, re-run the tests, then give your final answer."
+                    + (" Leave the TODO(tu) parts to the user." if self.learn else ""))
         except Cancelled:
             emit({"type": "cancelled"})
             return
@@ -357,7 +370,9 @@ class AgentRunner:
         with ThreadPoolExecutor(max_workers=max(1, len(gates))) as pool:
             outputs = list(pool.map(lambda key: team.gate_node({"agent": key, "state": review_state}), gates))
         issues = [i for out in outputs for i in out.get("issues", [])]
-        return [i for i in issues if i["severity"] in ("BLOCKER", "MAJOR")]
+        blocking = [i for i in issues if i["severity"] in ("BLOCKER", "MAJOR")]
+        # in modalità impara i TODO(tu) sono l'esercizio dell'utente, non un problema da correggere
+        return [i for i in blocking if "todo" not in i["text"].lower()] if self.learn else blocking
 
     @staticmethod
     def _footer(tools: AgentTools, review_note: str, result, request_wants_changes: bool = False) -> str:

@@ -36,7 +36,7 @@ from ..agent import CheckpointStore, PermissionPolicy
 from ..agent.context import append_memory, read_memory
 from ..agent.permissions import MODE_LABELS, ApprovalRequest
 from ..agent.permissions import MODES as PERMISSION_MODES
-from ..agent.runner import AgentRunner
+from ..agent.runner import LEARN_PROMPT, AgentRunner
 from ..config import load_settings
 from ..hooks import Hooks
 from ..mcp import McpManager
@@ -66,6 +66,7 @@ COMMANDS = {
     "/chat": "modalità chat: risponde senza toccare i file (usa /apply per salvarli)",
     "/agent": "modalità agente: lavora direttamente sui file (default)",
     "/apply": "scrivi su disco i file dell'ultima risposta (modalità chat)",
+    "/impara": "modalità impara: Vio spiega cosa fa e ti lascia scrivere un pezzo di codice · /impara off",
     "/new": "crea un progetto pronto: sito, gioco, bot-discord, api, python · /new <modello> [nome]",
     "/init": "crea MYDEVAGENT.md con comandi e convenzioni del progetto",
     "/memory": "mostra la memoria del progetto · /memory <testo> aggiunge una nota",
@@ -142,6 +143,7 @@ class TuiApp:
         self.hooks = Hooks(self.root)
         self.mcp = McpManager(self.root, configs={})  # si avviano in start_project, dopo il tuo sì
         self._load_prefs()
+        self.learn = bool(self._prefs().get("learn"))  # modalità impara
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
         names = {"/skill": lambda: list(load_skills(self.root)), "/new": lambda: list(templates.TEMPLATES)}
@@ -286,7 +288,8 @@ class TuiApp:
         if expression in ("ask", "chat", "auto-edit", "done") and int(now * 2) % 12 == 0:
             expression = "blink"
         width = self._width()
-        label = f"modalità {self.policy.mode}" if self.agent_mode else "modalità chat"
+        label = (f"modalità {self.policy.mode}" if self.agent_mode else "modalità chat") + (" · impara" if self.learn
+                                                                                             else "")
         room = max(10, width - mascot.WIDTH - 4)
         speech = [
             [],
@@ -466,6 +469,16 @@ class TuiApp:
                     self.completer.refresh()
         elif cmd == "/new":
             self._new(arg)
+        elif cmd == "/impara":
+            self.learn = arg.lower() in ("on", "sì", "si") or (arg.lower() not in ("off", "no") and not self.learn)
+            self._save_pref("learn", self.learn)
+            if self.learn:
+                c.print("[dim]⎿  modalità impara: spiego cosa faccio e ti lascio un pezzo da scrivere (lo trovi "
+                        "con TODO(tu)) · /impara off per tornare normale[/]", highlight=False)
+                self.say("Impariamo insieme! Qualche pezzo lo scrivi tu.", "love")
+            else:
+                c.print("[dim]⎿  modalità impara spenta: scrivo io tutto il codice[/]")
+                self.say("Ok, torno a scrivere io tutto il codice.", "done")
         elif cmd == "/init":
             was_agent, self.agent_mode = self.agent_mode, True
             self.submit(extras.INIT_TASK, display="/init")
@@ -1083,11 +1096,13 @@ class TuiApp:
                 if self.agent_mode:
                     extras_private_dir(self.root)
                     runner = AgentRunner(self.orch, self.root, self.policy, approver=approver,
-                                         checkpoints=self.checkpoints, hooks=self.hooks, mcp=self.mcp)
+                                         checkpoints=self.checkpoints, hooks=self.hooks, mcp=self.mcp,
+                                         learn=self.learn)
                     stream = runner.run(text, history=self.session.history, files=files, mode=mode,
                                         on_event=lambda e: events.put(("event", e)), cancel=cancel)
                 else:
-                    stream = self.orch.run(text, history=self.session.history, files=files, mode=mode,
+                    learn = {"Learning mode (follow these instructions)": LEARN_PROMPT} if self.learn else {}
+                    stream = self.orch.run(text, history=self.session.history, files={**files, **learn}, mode=mode,
                                            on_event=lambda e: events.put(("event", e)),
                                            show_thinking=self.show_thinking, cancel=cancel)
                 for chunk in stream:

@@ -81,6 +81,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/diff` | tutte le modifiche fatte ai file in questa sessione |
 | `/agent` · `/chat` | lavora sui file · rispondi soltanto |
 | `/apply` | (chat) scrive i file dell'ultima risposta dopo il diff |
+| `/impara` · `/impara off` | modalità impara: spiega cosa fa e ti lascia scrivere un pezzo di codice |
 | `/new [modello] [nome]` | crea un progetto pronto (sito, gioco, bot-discord, api, python) e ci lavora dentro |
 | `/init` | l'agente analizza il progetto e crea `MYDEVAGENT.md` (comandi, architettura, convenzioni) |
 | `/memory [testo]` | mostra la memoria del progetto · aggiunge una nota |
@@ -115,6 +116,17 @@ Il progetto nasce nella cartella aperta se è vuota, altrimenti in una sottocart
 cartella di MyDevAgent: lì va accanto). Ogni modello ha già il suo `MYDEVAGENT.md` con i comandi per
 avviarlo e provarlo, un `.gitignore` e `git init`. Poi basta dire cosa vuoi cambiare: «fai il sito sui
 miei disegni», «aggiungi i nemici al gioco».
+
+## Modalità impara: `/impara`
+Per imparare mentre programmi, come lo stile «Learning» di Claude Code. Con `/impara` l'agente:
+- dice in una o due frasi cosa sta per fare e perché;
+- scrive quasi tutto, ma ti lascia **un pezzo piccolo** (una condizione, un ciclo, il corpo di una funzione):
+  lo trovi nel codice con un commento `TODO(tu):` e un suggerimento, non la soluzione;
+- finisce con «💡 Da sapere»: due o tre concetti spiegati in parole semplici.
+
+Quando hai scritto il tuo pezzo diglielo («fatto»): lo legge e ti dice cosa va e cosa sistemare. I test che
+provano il tuo pezzo possono fallire finché non lo scrivi, e la review non lo conta come errore. Vio mostra
+«impara» sopra l'input; la scelta resta anche ai prossimi avvii, `/impara off` la spegne.
 
 ## Memoria del progetto: `MYDEVAGENT.md`
 Un file nella radice del progetto con comandi, architettura e convenzioni: l'agente lo legge a ogni

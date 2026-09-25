@@ -302,3 +302,19 @@ def test_new_project_command(settings, tmp_path):
     assert app.root == dest and app.session.cwd == str(dest) and app.policy.root == dest
     assert "python -m pytest -q" in (dest / "MYDEVAGENT.md").read_text()
     assert "main.py" in completions(app.completer, "migliora @mai")[0]
+
+
+def test_learning_mode_command(settings, project):
+    def make_app():
+        with create_pipe_input() as pipe:
+            return TuiApp(Orchestrator(settings, llm=FakeLLM()), console=record_console(), prompt_input=pipe,
+                          prompt_output=DummyOutput(), root=project, background=False)
+
+    app = make_app()
+    assert not app.learn
+    app.handle_command("/impara")
+    assert app.learn and "modalità ask · impara" in "".join(t for _, t in app.prompt_message())
+    again = make_app()  # la scelta resta anche al prossimo avvio
+    assert again.learn
+    again.handle_command("/impara off")
+    assert not again.learn and not make_app().learn
