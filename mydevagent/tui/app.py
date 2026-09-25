@@ -27,7 +27,6 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
-from rich.text import Text
 
 from .. import health
 from ..agent import CheckpointStore, PermissionPolicy
@@ -130,14 +129,16 @@ class TuiApp:
         self._load_prefs()
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
-        self.prompt = self._build_prompt(prompt_input, prompt_output)
+        self._vio_event: tuple[str | None, str, tuple] | None = None
+        self.say("Ciao! Chiedimi di modificare il codice: leggo, modifico, lancio i test e ti mostro i diff.")
+        self.prompt = self._build_prompt(prompt_input, prompt_output, animate=background)
         if background:
             threading.Thread(target=self._check_online, daemon=True).start()
             extras.warmup(self.orch.llm, self.orch.settings)
             threading.Thread(target=self._auto_index, daemon=True).start()
 
     # ------------------------------------------------------------ setup
-    def _build_prompt(self, prompt_input, prompt_output) -> PromptSession:
+    def _build_prompt(self, prompt_input, prompt_output, animate: bool = True) -> PromptSession:
         keys = KeyBindings()
 
         @keys.add("escape", "enter")  # Alt+Enter → nuova riga
@@ -169,6 +170,10 @@ class TuiApp:
             complete_while_typing=True,
             key_bindings=keys,
             bottom_toolbar=self.toolbar,
+            erase_when_done=True,  # Vio resta solo nella zona di input: nella cronologia ristampiamo la domanda
+            refresh_interval=0.5 if animate else None,  # tentacoli e palpebre
+            reserve_space_for_menu=4,
+            color_depth=_color_depth(),
             placeholder=[("class:placeholder", "Chiedi qualcosa… / comandi · @ file · ! shell · # memoria")],
             style=_style(),
             input=prompt_input,
@@ -242,9 +247,40 @@ class TuiApp:
         except Exception:
             return self.console.width
 
+    # ------------------------------------------------------------------ Vio
+    def _mode_key(self) -> tuple:
+        return (self.policy.mode, self.agent_mode, self.mode)
+
+    def say(self, text: str, expression: str | None = None) -> None:
+        """Cosa dice Vio sopra l'input. Vale finché non cambi modalità."""
+        self._vio_event = (expression, text, self._mode_key())
+
+    def vio_state(self) -> tuple[str, str]:
+        """(espressione, frase) di Vio in questo momento."""
+        if self._vio_event and self._vio_event[2] == self._mode_key():
+            expression, text, _ = self._vio_event
+            return expression or self.expression(), text
+        return self.expression(), mascot.SAYS[self.expression()]
+
     def prompt_message(self):
-        """Riga sopra l'input, come Claude Code e BluAgent."""
-        return [("class:rule", "─" * self._width() + "\n"), ("class:prompt", "› ")]
+        """Vio con il suo fumetto, una riga, poi l'input: come Claude Code e BluAgent."""
+        now = time.monotonic()
+        expression, text = self.vio_state()
+        if expression in ("ask", "chat", "auto-edit", "done") and int(now * 2) % 12 == 0:
+            expression = "blink"
+        width = self._width()
+        label = f"modalità {self.policy.mode}" if self.agent_mode else "modalità chat"
+        room = max(10, width - mascot.WIDTH - 4)
+        speech = [
+            [],
+            [("class:vio.name", mascot.NAME), ("class:tb.dim", f" · {label} · team {self.mode}"[:room])],
+            [("class:vio.say", text if len(text) <= room else text[: room - 1] + "…")],
+            [],
+        ]
+        out: list[tuple[str, str]] = []
+        for line, bubble in zip(mascot.fragments(expression, int(now) % 2), speech, strict=True):
+            out += [("", " ")] + line + [("", "  ")] + bubble + [("", "\n")]
+        return out + [("class:rule", "─" * width + "\n"), ("class:prompt", "› ")]
 
     def toolbar(self):
         net = {True: ("class:tb.ok", "✓ online"), False: ("class:tb.warn", "○ offline"),
@@ -253,11 +289,7 @@ class TuiApp:
         perm_style = {"ask": "class:tb.key", "auto-edit": "class:tb.ok", "plan": "class:tb.plan",
                       "auto": "class:tb.warn"}[perm]
         arrows = {"ask": "⏵", "auto-edit": "⏵⏵", "plan": "⏸", "auto": "⏵⏵⏵"}[perm]
-        expr = self.expression()
-        parts = [
-            ("class:rule", "─" * self._width() + "\n"),
-            ("class:tb.face", f" {mascot.face(expr)} "),
-        ]
+        parts = [("class:rule", "─" * self._width() + "\n"), ("", " ")]
         if self.agent_mode:
             parts += [(perm_style, f"{arrows} modalità {perm}"), ("class:tb.dim", " (shift+tab per cambiare)")]
         else:
@@ -272,32 +304,18 @@ class TuiApp:
             parts.append(("class:tb.dim", f" ·  {self.branch}"))
         return parts
 
-    def vio(self, expression: str, text: str | None = None) -> None:
-        self.console.print(mascot.card(expression, text))
-
     def banner(self) -> None:
         from .. import __version__
 
         settings = self.orch.settings
-        memory = "MYDEVAGENT.md ✓" if read_memory(self.root) else "nessuna (/init per crearla)"
-        tiers = " · ".join(f"{t}: {settings.resolve_model(t)[0]}" for t in ("main", "fast", "reasoning"))
-        info = Text.from_markup(
-            f"[bold {ACCENT}]MyDevAgent[/] [dim]v{__version__} · {len(self.orch.registry)} agenti · local-first[/]\n"
-            f"[bold]{escape(self.model)}[/] [dim]· profilo {settings.profile} · {self._hardware}[/]\n"
-            f"[dim]{escape(str(self.root))}[/]\n\n"
-            f"[dim]modelli:[/] {escape(tiers)}\n"
-            f"[dim]memoria:[/] {memory}\n\n"
-            f"[{ACCENT}]{mascot.NAME}:[/] Ciao! Chiedimi di modificare il codice: leggo, modifico, lancio i test "
-            "e ti mostro i diff.\n"
-            f"[dim][bold]/[/bold] comandi · [bold]@[/bold]file · [bold]![/bold]shell · [bold]#[/bold]memoria · "
-            "[bold]Shift+Tab[/bold] modalità · [bold]Esc[/bold] interrompe · [bold]/undo[/bold] annulla[/]"
+        memory = "MYDEVAGENT.md ✓" if read_memory(self.root) else "nessuna memoria (/init)"
+        body = (
+            f"[bold {ACCENT}]✻ MyDevAgent[/] [dim]v{__version__} · {len(self.orch.registry)} agenti · local-first[/]\n"
+            f"  [bold]{escape(self.model)}[/] [dim]· profilo {settings.profile} · {self._hardware} · {memory}[/]\n"
+            f"  [dim]{escape(str(self.root))}[/]"
         )
-        grid = Table.grid(padding=(0, 3))
-        grid.add_column(no_wrap=True, vertical="middle")
-        grid.add_column()
-        grid.add_row(mascot.render(self.expression()), info)
-        self.console.print(Panel(grid, border_style=ACCENT, expand=False, padding=(1, 2),
-                                 title=f"[bold {ACCENT}] Benvenuto in MyDevAgent [/]", title_align="left"))
+        self.console.print(Panel(body, border_style=ACCENT, expand=False, padding=(0, 1),
+                                 title="[dim]Benvenuto in MyDevAgent[/]", title_align="left"))
         if self.session.history:
             turns = len(self.session.history) // 2
             self.console.print(f"[dim]⎿  Ripresa sessione «{escape(self.session.title)}» ({turns} turni)[/]")
@@ -312,7 +330,9 @@ class TuiApp:
 
     # --------------------------------------------------------- domande utente
     def _input(self, message: str) -> str:
-        return self.prompt.prompt(message, bottom_toolbar=None, completer=None, placeholder="").strip()
+        answer = self.prompt.prompt(message, bottom_toolbar=None, completer=None, placeholder="").strip()
+        self.console.print(f"[dim]{escape(message)}[/]{escape(answer)}")  # l'input viene cancellato: lo ristampo
+        return answer
 
     def ask(self, question: str, allow_always: bool = True) -> str:
         if self._ask:
@@ -361,19 +381,19 @@ class TuiApp:
                     "permessi · Esc o Ctrl+C interrompe · Esc Esc torna indietro · Ctrl+D esce[/]")
         elif cmd[1:] in MODES and not arg:
             self.mode = self.session.mode = cmd[1:]
-            self.vio("auto-team" if self.mode == "auto" else self.mode, f"Team {self.mode}. "
-                     + mascot.SAYS["auto-team" if self.mode == "auto" else self.mode])
+            key = "auto-team" if self.mode == "auto" else self.mode
+            self.say(mascot.SAYS[key], key)
+            c.print(f"[dim]⎿  team: {self.mode}[/]")
         elif cmd in ("/fast", "/balanced", "/deep", "/ultra-deep") and arg:
             self.submit(text)  # "/deep crea un'API" → il router gestisce il comando inline
         elif cmd == "/plan":
             self.policy.mode = "ask" if self.policy.mode == "plan" else "plan"
-            self.vio(self.policy.mode, f"Modalità {self.policy.mode}. {mascot.SAYS[self.policy.mode]}")
+            c.print(f"[dim]⎿  modalità {self.policy.mode}: {mascot.SAYS[self.policy.mode]}[/]")
             if arg:
                 self.submit(arg)
         elif cmd == "/permissions":
             if arg in PERMISSION_MODES:
                 self.policy.mode = arg
-                self.vio(arg, f"Modalità {arg}. {mascot.SAYS[arg]}")
             c.print(f"[dim]⎿  modalità: [bold]{self.policy.mode}[/] ({MODE_LABELS[self.policy.mode]}) · "
                     f"disponibili: {', '.join(PERMISSION_MODES)}[/]")
             rules = self.policy.allow_rules
@@ -396,9 +416,8 @@ class TuiApp:
                 c.print("[dim]⎿  Nessuna modifica in questa sessione.[/]")
         elif cmd in ("/chat", "/agent"):
             self.agent_mode = cmd == "/agent"
-            expr = self.expression()
-            self.vio(expr, ("Modalità agente: lavoro direttamente sui file. " + mascot.SAYS[expr]) if self.agent_mode
-                     else "Modalità chat: " + mascot.SAYS["chat"])
+            c.print("[dim]⎿  " + ("modalità agente: lavoro direttamente sui file" if self.agent_mode
+                                   else "modalità chat: rispondo senza modificare i file") + "[/]")
         elif cmd == "/apply":
             if not self.last_answer:
                 c.print("[dim]⎿  Nessuna risposta da applicare.[/]")
@@ -469,8 +488,7 @@ class TuiApp:
             doctor(profile=None)
         elif cmd == "/vio":
             self._pats = getattr(self, "_pats", 0) + 1
-            self.vio("love", mascot.PATS[(self._pats - 1) % len(mascot.PATS)]
-                     + f"\n[dim]Ora sono in modalità {self.expression()}: {mascot.SAYS[self.expression()]}[/]")
+            self.say(mascot.PATS[(self._pats - 1) % len(mascot.PATS)], "love")
         elif cmd == "/theme":
             name = arg or ("light" if THEME["diff"] == "ansi_dark" else "dark")
             set_theme(name)
@@ -780,6 +798,7 @@ class TuiApp:
 
         threading.Thread(target=worker, daemon=True).start()
         abandoned = False
+        failed = ""
         watcher = EscWatcher()
 
         def interrupt() -> bool:
@@ -826,8 +845,8 @@ class TuiApp:
                         live.start()
                     elif kind == "error":
                         title, hint = health.explain_error(value, self.orch.settings)
-                        self.console.print(f"[red]{mascot.face('error')} {escape(title)}[/]\n"
-                                           f"  [dim]⎿  {escape(hint)}[/]")
+                        failed = title
+                        self.console.print(f"[red]⏺ {escape(title)}[/]\n  [dim]⎿  {escape(hint)}[/]")
                     elif kind == "chunk":
                         renderer.on_chunk(value)
                     else:
@@ -850,6 +869,12 @@ class TuiApp:
         answer = renderer.answer + ("\n\n[interrotto]" if renderer.cancelled else "")
         self.last_answer = renderer.answer
         self.completer.refresh()
+        if failed:
+            self.say(f"Ops: {failed}", "error")
+        elif renderer.cancelled:
+            self.say("Mi sono fermata. Dimmi come proseguire.", "think")
+        else:
+            self.say(f"Fatto in {elapsed:.0f}s! Cosa facciamo adesso?", "done")
         return answer
 
     # --------------------------------------------------------------- loop
@@ -861,6 +886,8 @@ class TuiApp:
             self.console.print()
             try:
                 text = self.prompt.prompt(self.prompt_message).strip()
+                if text:
+                    self.console.print(f"[{ACCENT}]›[/] {escape(text)}", highlight=False)
             except KeyboardInterrupt:
                 now = time.monotonic()
                 if now - self._ctrl_c_at < 1.5:
@@ -901,6 +928,17 @@ def extras_private_dir(root: Path) -> None:
         pass
 
 
+def _color_depth():
+    """Colori pieni dove il terminale li supporta (Windows Terminal, iTerm, VS Code…): Vio resta viola vero."""
+    import os
+
+    from prompt_toolkit.output import ColorDepth
+
+    if os.environ.get("COLORTERM") in ("truecolor", "24bit") or "WT_SESSION" in os.environ:
+        return ColorDepth.TRUE_COLOR
+    return None
+
+
 def _style():
     from prompt_toolkit.styles import Style
 
@@ -914,7 +952,8 @@ def _style():
         "tb.ok": "#6fbf73",
         "tb.warn": "#e0b04a",
         "tb.plan": "#67e8f9",
-        "tb.face": f"bold {ACCENT}",
+        "vio.name": f"bold {ACCENT}",
+        "vio.say": "#e9d5ff",
         "rule": "#7e22ce",
         "completion-menu.completion": "bg:#2b2b2b #d0d0d0",
         "completion-menu.completion.current": f"bg:{ACCENT} #ffffff",

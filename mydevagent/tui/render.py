@@ -8,8 +8,8 @@ from typing import Any
 from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
 from rich.markup import escape
-from rich.spinner import Spinner
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.text import Text
 
 from . import mascot
@@ -181,20 +181,21 @@ class TurnRenderer:
     # ------------------------------------------------------------- vista
     def view(self) -> RenderableType:
         elapsed = time.monotonic() - self.started
-        spinner = Spinner(
-            "dots",
-            text=Text.from_markup(f"[{ACCENT}]{mascot.think_face(elapsed)} {escape(self.status)}…[/] "
-                                  f"[dim](esc per interrompere · "
-                                  f"{elapsed:.0f}s · {self.tokens + len(self.answer) // 4:,} tok)[/]".replace(",", ".")),
-            style=ACCENT,
-        )
+        status = Text.from_markup(
+            f"\n[{ACCENT}]{escape(self.status)}…[/]\n[dim]esc per interrompere · {elapsed:.0f}s · "
+            f"{self.tokens + len(self.answer) // 4:,} tok[/]".replace(",", "."))
+        working = Table.grid(padding=(0, 2))
+        working.add_column(no_wrap=True)
+        working.add_column()
+        # Vio lavora: si guarda intorno e muove i tentacoli
+        working.add_row(mascot.render("think" if int(elapsed) % 4 else "look", int(elapsed * 2)), status)
         parts: list[RenderableType] = []
         if self.tail.strip():
             parts += [markdown(self.tail), Text("")]
         active = [t for t in self.todos if t["status"] != "completed"]
         if active:
             parts.append(Text.from_markup(render_todos(self.todos)))
-        parts.append(spinner)
+        parts.append(working)
         return Group(*parts)
 
     def finish(self) -> None:
@@ -204,4 +205,4 @@ class TurnRenderer:
         if self.cancelled:
             self.console.print("[yellow]⏺ Interrotto dall'utente[/]")
         if self.summary:
-            self.console.print(f"[{ACCENT}]{mascot.face('done')}[/] [dim]{escape(self.summary)}[/]")
+            self.console.print(f"[{ACCENT}]✻[/] [dim]{escape(self.summary)}[/]")

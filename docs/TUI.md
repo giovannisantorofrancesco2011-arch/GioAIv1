@@ -143,11 +143,15 @@ Anche gli errori durante l'uso sono spiegati in italiano con il rimedio (modello
 raggiungibile, modello troppo lento, memoria insufficiente), nella UI, in `mydevagent ask` e nel server.
 
 ## Vio, la mascotte
-Vio è la gattina viola di MyDevAgent, disegnata in pixel art direttamente nel terminale. Cambia espressione
-con la modalità: curiosa in `ask`, entusiasta in `auto-edit`, con gli occhiali in `plan`, con gli occhi a
-stella in `auto`, e ha un'espressione anche per la chat e per ogni team (`/fast`, `/balanced`, `/deep`,
-`/ultra-deep`). La sua faccina nella barra in basso cambia subito quando premi `Shift+Tab`. Mentre lavora si
-guarda intorno accanto all'indicatore di avanzamento, a fine lavoro sorride, e se qualcosa va storto ha gli
-occhi a X. Con `/vio` la saluti (e la accarezzi).
+Vio è il polpetto viola di MyDevAgent (tanti tentacoli, come i suoi agenti), disegnato in pixel art direttamente
+nel terminale: 14 colonne per 4 righe, sopra la barra dove scrivi, con accanto una frase.
+
+- Cambia espressione con la modalità: curiosa in `ask`, entusiasta in `auto-edit`, con gli occhiali in `plan`,
+  con gli occhi a stella in `auto`, e ne ha una per la chat e per ogni team (`/fast`, `/balanced`, `/deep`,
+  `/ultra-deep`). Con `Shift+Tab` cambia subito, insieme alla frase che spiega cosa farà.
+- Muove i tentacoli e ogni tanto sbatte le palpebre.
+- Mentre il team lavora resta sotto al lavoro in corso e si guarda intorno; a fine lavoro sorride e ti dice quanto
+  ci ha messo, se qualcosa va storto fa gli occhi a X.
+- `/vio` la saluta (e la accarezza).
 
 Anteprima di tutte le espressioni: `python -m mydevagent.tui.mascot`.

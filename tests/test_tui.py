@@ -209,23 +209,28 @@ def test_permission_cycle_and_toolbar(settings, project):
                      root=project, background=False)
     assert app.policy.next_mode() == "auto-edit" and app.policy.next_mode() == "plan"
     text = "".join(t for _, t in app.toolbar())
-    assert "⏸ modalità plan" in text and "(⌐■_■)" in text  # Vio con gli occhiali in modalità plan
+    assert "⏸ modalità plan" in text and "shift+tab" in text
     app.agent_mode = False
-    text = "".join(t for _, t in app.toolbar())
-    assert "modalità chat" in text and "(•ᴗ•)" in text
+    assert "modalità chat" in "".join(t for _, t in app.toolbar())
 
 
 def test_vio_reacts_to_modes(settings, project):
     from mydevagent.tui import mascot
 
-    assert all(len(row) == 14 for e in mascot.EXPRESSIONS for row in mascot.sprite(e))
+    assert all(len(row) == mascot.WIDTH for e in mascot.EXPRESSIONS for f in (0, 1) for row in mascot.sprite(e, f))
     assert all(e in mascot.SAYS for e in ("ask", "auto-edit", "plan", "auto", "chat", "fast", "ultra-deep"))
-    console = record_console()
     with create_pipe_input() as pipe:
-        app = TuiApp(Orchestrator(settings, llm=FakeLLM()), console=console, prompt_input=pipe,
+        app = TuiApp(Orchestrator(settings, llm=FakeLLM()), console=record_console(), prompt_input=pipe,
                      prompt_output=DummyOutput(), root=project, background=False)
-    for cmd in ("/plan", "/deep", "/chat", "/vio"):
-        app.handle_command(cmd)
-    out = console.export_text()
-    assert "Modalità plan. Leggo e ti propongo" in out and "Team deep." in out
-    assert "Modalità chat" in out and "Grazie! ♥" in out and "▀" in out
+    assert app.vio_state()[1].startswith("Ciao!")
+    app.policy.next_mode()  # Shift+Tab: Vio cambia faccia e frase
+    assert app.vio_state() == ("auto-edit", mascot.SAYS["auto-edit"])
+    app.handle_command("/plan")
+    assert app.vio_state()[0] == "plan"
+    app.handle_command("/deep")
+    assert app.vio_state() == ("deep", mascot.SAYS["deep"])
+    app.handle_command("/vio")
+    assert app.vio_state() == ("love", "Grazie! ♥")
+    text = "".join(t for _, t in app.prompt_message())
+    assert "Vio · modalità plan · team deep" in text and "Grazie! ♥" in text and "▀" in text
+    assert text.endswith("› ") and len(text.splitlines()) == 6  # 4 righe di Vio, la riga, l'input
