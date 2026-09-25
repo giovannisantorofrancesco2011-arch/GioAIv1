@@ -1,0 +1,57 @@
+# MyDevAgent Studio: a ogni push su questo branch compila e prova l'estensione, costruisce l'installer
+# per Windows (VSCodium + MyDevAgent) e lo pubblica nella release «studio-v<versione>».
+name: MyDevAgent Studio
+
+on:
+  push:
+    branches: [MyDevAgent-Studio]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Estensione (compila, prova, impacchetta)
+        working-directory: extension
+        run: |
+          npm ci --no-audit --no-fund
+          npm run compile
+          npm test
+          npm run package
+
+      - name: Studio (VSCodium + estensione + installer)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./studio/build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyDevAgent-Studio
+          path: build/out/*
+
+      - name: Pubblica la release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $versione = (Get-Content extension/package.json -Raw | ConvertFrom-Json).version
+          $tag = "studio-v$versione"
+          gh release delete $tag --cleanup-tag --yes 2>$null
+          gh release create $tag build/out/MyDevAgent-Studio-Setup.exe build/out/mydevagent.vsix `
+            --target $env:GITHUB_SHA --latest --title "MyDevAgent Studio $versione" --notes-file studio/NOTE.md
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
