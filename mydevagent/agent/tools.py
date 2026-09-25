@@ -19,6 +19,7 @@ from ..mcp import McpManager
 from ..skills import Skill
 from ..subagents import SubAgent
 from ..tools.filesystem import IGNORED_DIRS, Workspace, WorkspaceError
+from ..tools.preview import is_local
 from .checkpoints import CheckpointStore
 from .permissions import EDIT_TOOLS, ApprovalRequest, Approver, PermissionPolicy, is_dangerous
 
@@ -65,6 +66,15 @@ SPECS: list[dict[str, Any]] = [
      "parameters": {"type": "object", "properties": {
          "url": {"type": "string"}, "offset": {"type": "integer", "description": "character to start from"}},
          "required": ["url"]}},
+    {"name": "preview", "description": "See a web page of the project like the user would: opens it on localhost "
+     "in a headless browser, takes a screenshot (described by the vision model) and reports console errors, "
+     "missing files and the visible text. Use it after changing a web page to check the result. `path`: an HTML "
+     "file of the project (default index.html). For a site with its own server give `url` (localhost) and "
+     "`start`, the command that starts it (e.g. `npm run dev`): it keeps running for later previews.",
+     "parameters": {"type": "object", "properties": {
+         "path": {"type": "string"}, "url": {"type": "string"},
+         "start": {"type": "string", "description": "command that starts the local server"},
+         "look": {"type": "string", "description": "what to check on the page"}}}},
     {"name": "mcp", "description": "Use an external MCP server (see the MCP servers list). With only `server`, "
      "list its tools and their arguments; with `tool` and `arguments`, call one.",
      "parameters": {"type": "object", "properties": {
@@ -127,7 +137,7 @@ class AgentTools:
     def __init__(self, root: Path, policy: PermissionPolicy, checkpoints: CheckpointStore,
                  approver: Approver | None = None, emit: EventHandler | None = None,
                  web_search: Callable[[str], str] | None = None, memory: str = "",
-                 web_fetch: Callable[[str], str] | None = None,
+                 web_fetch: Callable[[str], str] | None = None, preview: Callable[..., str] | None = None,
                  bash_timeout: int = 120, skills: dict[str, Skill] | None = None,
                  hooks: Hooks | None = None, mcp: McpManager | None = None,
                  subagents: dict[str, SubAgent] | None = None, spawn: Spawn | None = None,
@@ -140,6 +150,7 @@ class AgentTools:
         self.emit = emit or (lambda _e: None)
         self.web_search_fn = web_search
         self.web_fetch_fn = web_fetch
+        self.preview_fn = preview  # anteprima dei siti: c'è solo se sul PC c'è Chrome, Edge o Chromium
         self.memory = memory
         self.bash_timeout = bash_timeout
         self.skills = skills or {}
@@ -159,7 +170,7 @@ class AgentTools:
     # ----------------------------------------------------------------- spec
     def specs(self) -> list[dict[str, Any]]:
         specs = [s for s in SPECS if (s["name"] != "web_search" or self.web_search_fn)
-                 and (s["name"] != "web_fetch" or self.web_fetch_fn)
+                 and (s["name"] != "web_fetch" or self.web_fetch_fn) and (s["name"] != "preview" or self.preview_fn)
                  and (s["name"] != "skill" or self.skills) and (s["name"] != "mcp" or self.mcp)
                  and (s["name"] != "task" or (self.subagents and self.spawn))
                  and (self.allowed is None or s["name"] in self.allowed)]
@@ -437,6 +448,23 @@ class AgentTools:
         rest = len(text) - start - len(part)
         more = f"\n\n… {rest} more characters: call web_fetch again with offset={start + len(part)}" if rest > 0 else ""
         return f"{url} ({len(text)} characters)\n{part}{more}" if part else f"{url}: no more text (offset {start})"
+
+    def _t_preview(self, path: str = "", url: str = "", start: str = "", look: str = "") -> str:
+        if not self.preview_fn:
+            return "ERROR: preview not available (no Chrome, Edge or Chromium on this computer)."
+        if url:
+            url = url.strip() if "://" in url else "http://" + url.strip()
+            if not is_local(url):
+                return "ERROR: preview is for sites on this computer (localhost); use web_fetch for the others."
+        elif start:
+            return "ERROR: with `start`, also give the `url` where the server answers (e.g. http://localhost:5173)."
+        elif path:
+            self.workspace.resolve(path)  # dentro il progetto
+        if start:  # accendere un server è un comando come gli altri: stessi permessi di bash
+            denied = self._authorize("bash", {"command": start}, f"Bash({start})")
+            if denied:
+                return denied
+        return self.preview_fn(self.root, url=url, path=path, start=start, look=look)
 
     def _t_web_search(self, query: str) -> str:
         if not self.web_search_fn:

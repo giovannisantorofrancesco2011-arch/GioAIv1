@@ -24,7 +24,7 @@ MAX_DIFF_LINES = 40
 TOOL_LABELS = {
     "read_file": "Read", "list_files": "List", "grep": "Search", "bash": "Bash", "run_tests": "Test",
     "web_search": "Web", "web_fetch": "Fetch", "rag_search": "Codebase", "skill": "Skill", "mcp": "MCP",
-    "task": "Agent",
+    "task": "Agent", "preview": "Anteprima",
 }
 TODO_ICONS = {"completed": "[green]☑[/]", "in_progress": f"[{ACCENT}]◼[/]", "pending": "[dim]☐[/]"}
 

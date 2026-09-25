@@ -25,6 +25,7 @@ from ..mcp import McpManager
 from ..skills import load_skills, skills_prompt
 from ..state import TeamState, render_files, render_history, truncate
 from ..subagents import SubAgent, load_subagents, subagents_prompt
+from ..tools import preview
 from ..tools.web_fetch import UnsafeURLError, fetch_text
 from ..tools.web_search import format_results
 from .checkpoints import CheckpointStore
@@ -118,6 +119,7 @@ class AgentRunner:
         web = orch.toolbox.ctx.web
         web_fn = (lambda q: format_results(web.search(q))) if settings.tools.web.enabled else None
         fetch_fn = partial(self._fetch, orch.toolbox.ctx) if settings.tools.web.enabled else None
+        preview_fn = partial(preview.preview, llm=orch.llm) if preview.find_browser() else None
         memory = read_memory(self.root)
         skills = load_skills(self.root)
         subagents = load_subagents(self.root)
@@ -131,7 +133,7 @@ class AgentRunner:
 
         def tools_for(allowed: set[str] | None = None, **extra) -> AgentTools:
             return AgentTools(self.root, self.policy, self.checkpoints, approver=self.approver, emit=emit,
-                              web_search=web_fn, web_fetch=fetch_fn, memory=memory, skills=skills,
+                              web_search=web_fn, web_fetch=fetch_fn, preview=preview_fn, memory=memory, skills=skills,
                               hooks=self.hooks, mcp=mcp,
                               allowed=allowed, **extra)
 

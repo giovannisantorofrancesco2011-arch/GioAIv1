@@ -36,7 +36,8 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 - **agente** (`/agent`): il team lavora **direttamente sui file** della cartella in cui hai aperto
   MyDevAgent, con dei tool: `read_file`, `list_files`, `grep`, `edit_file` (sostituzione esatta di un
   pezzo di testo), `write_file`, `bash`, `run_tests`, `todo_write`, `web_search`,
-  `web_fetch` (legge una pagina web: la prima volta per ogni sito chiede il permesso, anche in `plan`).
+  `web_fetch` (legge una pagina web: la prima volta per ogni sito chiede il permesso, anche in `plan`),
+  `preview` (guarda una pagina del progetto su localhost, vedi «Anteprima dei siti»).
 - **chat** (`/chat`): risponde con il codice senza toccare i file; `/apply` lo salva dopo il diff.
 
 ## Permessi (come Claude Code) — `Shift+Tab` per cambiarli
@@ -81,6 +82,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/diff` | tutte le modifiche fatte ai file in questa sessione |
 | `/agent` · `/chat` | lavora sui file · rispondi soltanto |
 | `/apply` | (chat) scrive i file dell'ultima risposta dopo il diff |
+| `/anteprima [file \| url]` | apre nel browser il sito del progetto, servito su localhost |
 | `/impara` · `/impara off` | modalità impara: spiega cosa fa e ti lascia scrivere un pezzo di codice |
 | `/new [modello] [nome]` | crea un progetto pronto (sito, gioco, bot-discord, api, python) e ci lavora dentro |
 | `/init` | l'agente analizza il progetto e crea `MYDEVAGENT.md` (comandi, architettura, convenzioni) |
@@ -116,6 +118,21 @@ Il progetto nasce nella cartella aperta se è vuota, altrimenti in una sottocart
 cartella di MyDevAgent: lì va accanto). Ogni modello ha già il suo `MYDEVAGENT.md` con i comandi per
 avviarlo e provarlo, un `.gitignore` e `git init`. Poi basta dire cosa vuoi cambiare: «fai il sito sui
 miei disegni», «aggiungi i nemici al gioco».
+
+## Anteprima dei siti
+Quando l'agente cambia una pagina web la guarda da solo, con lo strumento **Anteprima**: la apre su
+localhost in un browser senza finestra (Chrome, Edge o Chromium, quello che hai già), fa uno screenshot che
+il modello `vision` descrive, e legge gli errori della console, i file mancanti e il testo visibile.
+- un file HTML del progetto (`index.html` se non dice altro) viene servito su `127.0.0.1`, senza file
+  nascosti (`.git`, `.env`) né chiavi;
+- un sito con il suo server (`npm run dev`, `uvicorn`, Flask…) si apre con il suo url: l'agente può
+  accenderlo con il suo comando, che chiede il permesso come ogni comando e resta acceso finché MyDevAgent
+  è aperto (l'output finisce in `.mydevagent/preview-server.log`).
+
+Lo screenshot resta in `.mydevagent/preview.png`. Senza modello vision l'agente usa solo testo ed errori:
+`/pull qwen2.5vl:7b` (o quello del tuo profilo, vedi `/models`). Per vedere il sito tu: `/anteprima` apre
+`index.html` nel browser, `/anteprima pagina.html` un'altra pagina, `/anteprima localhost:5173` un server
+già acceso. Un browser diverso: `MYDEVAGENT_BROWSER=<percorso>` nel `.env`.
 
 ## Modalità impara: `/impara`
 Per imparare mentre programmi, come lo stile «Learning» di Claude Code. Con `/impara` l'agente:

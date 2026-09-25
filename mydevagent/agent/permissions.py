@@ -18,7 +18,7 @@ MODE_LABELS = {
     "auto": "tutto automatico",
 }
 # "task" avvia un sotto-agente: i suoi tool chiedono i permessi uno per uno
-READ_TOOLS = {"read_file", "list_files", "grep", "web_search", "todo_write", "git_diff", "skill", "task"}
+READ_TOOLS = {"read_file", "list_files", "grep", "web_search", "todo_write", "git_diff", "skill", "task", "preview"}
 EDIT_TOOLS = {"edit_file", "write_file"}
 EXEC_TOOLS = {"bash", "run_tests"}
 

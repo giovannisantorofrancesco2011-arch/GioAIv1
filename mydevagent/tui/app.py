@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import json
 import queue
+import re
 import subprocess
 import threading
 import time
+import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory, InMemoryHistory
@@ -43,7 +46,8 @@ from ..mcp import McpManager
 from ..orchestrator import Orchestrator
 from ..skills import load_skills
 from ..subagents import load_subagents
-from ..tools.filesystem import Workspace
+from ..tools import preview as preview_mod
+from ..tools.filesystem import Workspace, WorkspaceError
 from . import extras, mascot
 from .apply import apply_answer
 from .completion import DevCompleter
@@ -67,6 +71,7 @@ COMMANDS = {
     "/agent": "modalità agente: lavora direttamente sui file (default)",
     "/apply": "scrivi su disco i file dell'ultima risposta (modalità chat)",
     "/impara": "modalità impara: Vio spiega cosa fa e ti lascia scrivere un pezzo di codice · /impara off",
+    "/anteprima": "apre nel browser il sito del progetto (su localhost) · /anteprima <file.html | url>",
     "/new": "crea un progetto pronto: sito, gioco, bot-discord, api, python · /new <modello> [nome]",
     "/init": "crea MYDEVAGENT.md con comandi e convenzioni del progetto",
     "/memory": "mostra la memoria del progetto · /memory <testo> aggiunge una nota",
@@ -469,6 +474,8 @@ class TuiApp:
                     self.completer.refresh()
         elif cmd == "/new":
             self._new(arg)
+        elif cmd == "/anteprima":
+            self._preview(arg)
         elif cmd == "/impara":
             self.learn = arg.lower() in ("on", "sì", "si") or (arg.lower() not in ("off", "no") and not self.learn)
             self._save_pref("learn", self.learn)
@@ -641,6 +648,28 @@ class TuiApp:
         if dest != self.root:
             self.switch_root(dest)
         self.say("Progetto pronto! Dimmi come vuoi personalizzarlo.", "love")
+
+    def _preview(self, arg: str) -> None:
+        """Il sito del progetto nel browser: un file HTML servito su localhost, oppure l'url di un server acceso."""
+        target = arg.strip()
+        if "://" in target or re.match(r"(localhost|127\.0\.0\.1)(:\d+)?(/|$)", target):
+            url = target if "://" in target else f"http://{target}"
+        else:
+            page = target or "index.html"
+            try:
+                path = Workspace(self.root).resolve(page)
+            except WorkspaceError:
+                path = None
+            if path is None or not path.is_file():
+                self.console.print(f"[red]⎿  non trovo {escape(page)}[/] [dim]· /anteprima <file.html> oppure "
+                                   "/anteprima <url>, es. /anteprima localhost:5173[/]", highlight=False)
+                return
+            url = f"{preview_mod.serve(self.root)}/{quote(path.relative_to(self.root).as_posix())}"
+        opened = webbrowser.open(url)
+        self.console.print(f"[green]⏺[/] Anteprima: {escape(url)}", highlight=False)
+        self.console.print("  [dim]⎿  " + ("aperta nel browser" if opened else "aprila nel browser")
+                           + " · resta accesa finché MyDevAgent è aperto · l'agente la guarda da solo quando "
+                             "serve[/]", highlight=False)
 
     def switch_root(self, path: Path) -> None:
         """Lavora in un'altra cartella (dopo /new): conversazione, checkpoint, permessi e plugin di lì."""

@@ -3,7 +3,7 @@
 Sito statico: HTML, CSS e JavaScript, senza build e senza dipendenze.
 
 ## Comandi
-- anteprima: apri index.html nel browser, oppure chiedi all'agente «mostrami l'anteprima»
+- anteprima: `/anteprima` apre il sito nel browser; l'agente lo guarda da solo con lo strumento `preview`
 
 ## Convenzioni
 - index.html per la struttura, style.css per l'aspetto, script.js per l'interattività

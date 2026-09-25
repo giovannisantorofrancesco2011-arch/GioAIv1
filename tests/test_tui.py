@@ -318,3 +318,19 @@ def test_learning_mode_command(settings, project):
     assert again.learn
     again.handle_command("/impara off")
     assert not again.learn and not make_app().learn
+
+
+def test_preview_command(settings, project, monkeypatch):
+    opened = []
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
+    (project / "index.html").write_text("<h1>Ciao</h1>")
+    console = record_console()
+    with create_pipe_input() as pipe:
+        app = TuiApp(Orchestrator(settings, llm=FakeLLM()), console=console, prompt_input=pipe,
+                     prompt_output=DummyOutput(), root=project, background=False)
+    app.handle_command("/anteprima")
+    app.handle_command("/anteprima localhost:5173")
+    app.handle_command("/anteprima manca.html")
+    assert opened[0].startswith("http://127.0.0.1:") and opened[0].endswith("/index.html")
+    assert opened[1] == "http://localhost:5173" and len(opened) == 2
+    assert "non trovo manca.html" in console.export_text()
