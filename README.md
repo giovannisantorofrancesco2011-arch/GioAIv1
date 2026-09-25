@@ -212,6 +212,10 @@ Il server rispetta `MYDEVAGENT_API_KEY` (Bearer) — obbligatoria se lo esponi f
 Qualsiasi server compatibile OpenAI funziona: basta `LLM_BASE_URL` e i nomi dei modelli nel profilo.
 
 ## Integrazione negli IDE
+- **MyDevAgent Studio** (Windows): l'editor basato su VSCodium con Vio già dentro, chat, conferma delle modifiche,
+  Ctrl+I e Tab. [Scarica l'installer](https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent/releases/latest/download/MyDevAgent-Studio-Setup.exe),
+  sorgenti nel branch [MyDevAgent-Studio](https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent/tree/MyDevAgent-Studio)
+  (usa `mydevagent bridge`, vedi `mydevagent/bridge.py`)
 - **VS Code + Continue.dev** (chat multi-agente, edit inline, autocomplete, @codebase):
   [integrations/vscode.md](integrations/vscode.md) + [integrations/continue/config.yaml](integrations/continue/config.yaml)
 - **GitHub Copilot Chat** con modelli locali (Ollama): [integrations/vscode.md](integrations/vscode.md#2-github-copilot-chat-con-modelli-locali-byok)

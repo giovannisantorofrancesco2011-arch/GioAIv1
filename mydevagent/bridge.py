@@ -152,7 +152,7 @@ class Bridge:
             "history": [{"role": m["role"], "content": m["content"]} for m in self.session.history],
             "untrusted": {"hooks": [f"{h.event}: {h.command}" for h in hooks_mod.untrusted(self.root)],
                           "mcp": [f"{s.name}: {s.describe()}" for s in mcp_mod.untrusted(self.root)]},
-            "commands": self._commands(),
+            "commands": self._commands(), "agents": {a.key: a.name for a in self.orch.registry},
         }
 
     def m_set(self, p: dict[str, Any]) -> dict[str, Any]:

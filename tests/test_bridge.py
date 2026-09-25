@@ -68,6 +68,7 @@ def test_hello_and_settings(settings, project):
     assert hello["protocol"] == 1 and hello["root"] == str(project.resolve())
     assert hello["models"]["main"] == settings.resolve_model("main")[0] and hello["ollama"] is True
     assert hello["permission"] == "ask" and "ultra-deep" in hello["teams"] and hello["history"] == []
+    assert hello["agents"]["architect"]
     assert call(bridge, wire, 2, "set", team="fast", permission="auto-edit")["result"]["team"] == "fast"
     assert bridge.policy.mode == "auto-edit"
     assert "sconosciuta" in call(bridge, wire, 3, "set", permission="boh")["error"]["message"]
