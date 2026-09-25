@@ -28,7 +28,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
-from .. import health, plugins
+from .. import health, plugins, templates
 from .. import hooks as hooks_mod
 from .. import mcp as mcp_mod
 from .. import update as update_mod
@@ -66,6 +66,7 @@ COMMANDS = {
     "/chat": "modalità chat: risponde senza toccare i file (usa /apply per salvarli)",
     "/agent": "modalità agente: lavora direttamente sui file (default)",
     "/apply": "scrivi su disco i file dell'ultima risposta (modalità chat)",
+    "/new": "crea un progetto pronto: sito, gioco, bot-discord, api, python · /new <modello> [nome]",
     "/init": "crea MYDEVAGENT.md con comandi e convenzioni del progetto",
     "/memory": "mostra la memoria del progetto · /memory <testo> aggiunge una nota",
     "/compact": "riassume la conversazione per liberare contesto",
@@ -143,7 +144,8 @@ class TuiApp:
         self._load_prefs()
         all_commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
         self.completer = DevCompleter(all_commands, dict(self.orch.registry.by_alias), self.root)
-        self.completer.skill_names = lambda: list(load_skills(self.root))
+        names = {"/skill": lambda: list(load_skills(self.root)), "/new": lambda: list(templates.TEMPLATES)}
+        self.completer.arguments = {**names, "/skills": names["/skill"]}
         self._vio_event: tuple[str | None, str, tuple] | None = None
         self.say("Ciao, sono Vio! Scrivi qui sotto cosa vuoi fare.")
         self.prompt = self._build_prompt(prompt_input, prompt_output, animate=background)
@@ -462,6 +464,8 @@ class TuiApp:
                 written = apply_answer(self.last_answer, self.orch.registry, self.root, c, self.ask)
                 if written:
                     self.completer.refresh()
+        elif cmd == "/new":
+            self._new(arg)
         elif cmd == "/init":
             was_agent, self.agent_mode = self.agent_mode, True
             self.submit(extras.INIT_TASK, display="/init")
@@ -598,6 +602,50 @@ class TuiApp:
         self.say(f"Uso la skill {skill.name}.", "think")
         self.submit(f"Follow the skill `{skill.name}` for this request.\n\n{skill.read()}\n\n# Request\n{task}",
                     display=f"/skill {arg}")
+
+    def _new(self, arg: str) -> None:
+        kind, _, name = arg.partition(" ")
+        if kind.lower() not in templates.TEMPLATES:
+            if kind:
+                self.console.print(f"[red]⎿  modello sconosciuto: {escape(kind)}[/]")
+            table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
+            table.add_column("modello")
+            table.add_column("cosa ottieni")
+            for key, description in templates.TEMPLATES.items():
+                table.add_row(f"[{ACCENT}]{key}[/]", description)
+            self.console.print(table)
+            self.console.print("[dim]/new <modello> \\[nome] · nasce in una cartella nuova qui (o in questa, se è "
+                               "vuota), poi ci lavoro dentro[/]", highlight=False)
+            return
+        try:
+            dest = templates.target_for(self.root, kind.lower(), name.strip())
+            created = templates.create(kind.lower(), dest)
+        except (ValueError, OSError) as exc:
+            self.console.print(f"[red]⎿  {escape(str(exc))}[/]", highlight=False)
+            return
+        self.console.print(f"[green]⏺[/] Creato il progetto «{kind.lower()}» in {escape(str(dest))}", highlight=False)
+        self.console.print(f"  [dim]⎿  {escape(', '.join(created))}[/]", highlight=False)
+        if dest != self.root:
+            self.switch_root(dest)
+        self.say("Progetto pronto! Dimmi come vuoi personalizzarlo.", "love")
+
+    def switch_root(self, path: Path) -> None:
+        """Lavora in un'altra cartella (dopo /new): conversazione, checkpoint, permessi e plugin di lì."""
+        self.session.save()
+        self.root = Path(path).resolve()
+        self.session = Session(cwd=str(self.root), mode=self.mode)
+        self.policy = PermissionPolicy(mode=self.policy.mode, root=self.root)
+        self.checkpoints = CheckpointStore(self.root)
+        existing = self.checkpoints.list()
+        self.session_start_cp = (existing[-1].id + 1) if existing else 1
+        self.last_answer, self.last_files, self.pending_context = "", {}, {}
+        self.branch = self._git_branch()
+        self.custom = extras.custom_commands(self.root)
+        self.completer.commands = {**COMMANDS, **{k: v[0] for k, v in self.custom.items()}}
+        self.completer.root = self.root
+        self.completer.refresh()
+        self.start_project()
+        self.console.print(f"  [dim]⎿  ora lavoro in {escape(str(self.root))}[/]", highlight=False)
 
     def _update(self) -> None:
         with self.console.status(f"[{ACCENT}]Aggiorno MyDevAgent…[/]"):

@@ -81,6 +81,7 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/diff` | tutte le modifiche fatte ai file in questa sessione |
 | `/agent` · `/chat` | lavora sui file · rispondi soltanto |
 | `/apply` | (chat) scrive i file dell'ultima risposta dopo il diff |
+| `/new [modello] [nome]` | crea un progetto pronto (sito, gioco, bot-discord, api, python) e ci lavora dentro |
 | `/init` | l'agente analizza il progetto e crea `MYDEVAGENT.md` (comandi, architettura, convenzioni) |
 | `/memory [testo]` | mostra la memoria del progetto · aggiunge una nota |
 | `/compact` | riassume la conversazione (automatico oltre 10 turni) |
@@ -98,6 +99,22 @@ Ho aggiunto sub in calc.py e il test test_sub; 2 test passati.
 | `/update` | aggiorna MyDevAgent (`git pull`, dipendenze se cambiate); all'avvio Vio ti avvisa delle novità |
 | `/theme [dark\|light]` | tema dei diff e del codice |
 | `/resume` · `/export` · `/clear` · `/exit` | sessioni, export Markdown, nuova conversazione, esci |
+
+## Progetti pronti: `/new`
+`/new` elenca i modelli, `/new <modello> [nome]` crea il progetto e da lì in poi lavori dentro di lui:
+
+| Modello | Cosa ottieni |
+|---|---|
+| `sito` | sito web con HTML, CSS e JavaScript (tema chiaro/scuro), senza installare niente |
+| `gioco` | gioco 2D con Pygame: acchiappa le stelle |
+| `bot-discord` | bot Discord con `!ciao` e `!dado`; i passaggi per il token sono nel suo `MYDEVAGENT.md` |
+| `api` | API con FastAPI e i test (`python -m pytest -q`) |
+| `python` | programma Python con i test, per iniziare |
+
+Il progetto nasce nella cartella aperta se è vuota, altrimenti in una sottocartella nuova (mai dentro la
+cartella di MyDevAgent: lì va accanto). Ogni modello ha già il suo `MYDEVAGENT.md` con i comandi per
+avviarlo e provarlo, un `.gitignore` e `git init`. Poi basta dire cosa vuoi cambiare: «fai il sito sui
+miei disegni», «aggiungi i nemici al gioco».
 
 ## Memoria del progetto: `MYDEVAGENT.md`
 Un file nella radice del progetto con comandi, architettura e convenzioni: l'agente lo legge a ogni

@@ -18,7 +18,7 @@ class DevCompleter(Completer):
         self.aliases = aliases  # alias → chiave agente
         self.root = root
         self._files: list[str] | None = None
-        self.skill_names: Callable[[], list[str]] = list  # impostato dalla UI
+        self.arguments: dict[str, Callable[[], list[str]]] = {}  # /comando → nomi da completare (dalla UI)
 
     @property
     def files(self) -> list[str]:
@@ -38,10 +38,10 @@ class DevCompleter(Completer):
         word = document.get_word_before_cursor(WORD=True)
         before = document.text_before_cursor
         parts = before.split(" ")
-        if len(parts) == 2 and parts[0].lower() in ("/skill", "/skills"):
-            for name in self.skill_names():
+        if len(parts) == 2 and parts[0].lower() in self.arguments:
+            for name in self.arguments[parts[0].lower()]():
                 if name.startswith(parts[1].lower()):
-                    yield Completion(name, -len(parts[1]), display_meta="skill")
+                    yield Completion(name, -len(parts[1]), display_meta=parts[0].lower()[1:])
         elif word.startswith("/") and before.strip() == word:
             for cmd, desc in self.commands.items():
                 if cmd.startswith(word.lower()):

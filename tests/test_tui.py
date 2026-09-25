@@ -283,3 +283,22 @@ def test_plugin_command(settings, project, tmp_path, monkeypatch):
     assert "Nessun plugin" in out and "Installato revisore" in out and "1 comando · 1 skill · 1 agente" in out
     assert "1 comando · 1 skill · 1 agente · hook" in out and "Rimosso revisore" in out and "uso: /plugin" in out
     assert "/rivedi" not in app.custom
+
+
+def test_new_project_command(settings, tmp_path):
+    work = tmp_path / "lavori"
+    (work / "vecchio").mkdir(parents=True)
+    console = record_console()
+    with create_pipe_input() as pipe:
+        app = TuiApp(Orchestrator(settings, llm=FakeLLM()), console=console, prompt_input=pipe,
+                     prompt_output=DummyOutput(), root=work, background=False)
+    assert completions(app.completer, "/new bo") == ["bot-discord"]
+    app.handle_command("/new")
+    app.handle_command("/new boh")
+    app.handle_command("/new api")
+    out = console.export_text()
+    assert "bot-discord" in out and "modello sconosciuto: boh" in out and "ora lavoro in" in out
+    dest = (work / "api").resolve()
+    assert app.root == dest and app.session.cwd == str(dest) and app.policy.root == dest
+    assert "python -m pytest -q" in (dest / "MYDEVAGENT.md").read_text()
+    assert "main.py" in completions(app.completer, "migliora @mai")[0]

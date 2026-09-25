@@ -69,6 +69,7 @@ Ruoli, prompt, tool, flusso e interazioni: **[docs/AGENTS.md](docs/AGENTS.md)**.
 | Hook: comandi automatici prima/dopo i tool, all'invio e alla fine (formato Claude Code) | Claude Code | `/hooks` |
 | Server MCP (GitHub, database, browser…), anche quelli già configurati in Claude Code | Claude Code | `/mcp` |
 | Sotto-agenti con contesto separato (`.claude/agents/*.md`, anche dai plugin) | Claude Code | `/agents` |
+| Progetti pronti: sito, gioco Pygame, bot Discord, API FastAPI, programma Python con i test | MyDevAgent | `/new` |
 | Compattazione della conversazione | Claude Code | `/compact`, automatica |
 | Team multi-agente con review sul diff reale e dibattito sul piano | MyDevAgent | `/balanced` `/deep` `/ultra-deep` |
 
