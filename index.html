@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MyDevAgent · il tuo team di agenti AI, sul tuo PC</title>
-<meta name="description" content="MyDevAgent: assistente di programmazione local-first con 35 agenti specializzati. Gira offline sul tuo PC con Ollama.">
-<meta name="theme-color" content="#0a0612">
+<meta name="description" content="MyDevAgent: assistente di programmazione local-first con 35 agenti specializzati e Vio, il polpetto viola. Gira offline sul tuo PC con Ollama.">
+<meta property="og:title" content="MyDevAgent · 35 agenti AI sul tuo PC">
+<meta property="og:description" content="Legge il tuo progetto, scrive il codice, lancia i test e si corregge da solo. Gratis, open source, offline.">
+<meta name="theme-color" content="#07040d">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 8' shape-rendering='crispEdges'%3E%3Crect x='4' width='6' height='1' fill='%23581c87'/%3E%3Crect x='2' y='1' width='10' height='6' fill='%23a855f7'/%3E%3Crect x='4' y='3' width='2' height='2' fill='%231a0b2e'/%3E%3Crect x='8' y='3' width='2' height='2' fill='%231a0b2e'/%3E%3Crect x='1' y='7' width='12' height='1' fill='%23581c87'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,6 +16,8 @@
   :root {
     --bg: #07040d;
     --bg2: #0f0a1a;
+    --panel: #0b0712;
+    --panel2: #120b1e;
     --card: rgba(24, 14, 40, .65);
     --line: rgba(168, 85, 247, .22);
     --purple: #a855f7;
@@ -21,8 +25,13 @@
     --purple-dd: #581c87;
     --lilac: #d8b4fe;
     --pink: #f472b6;
+    --green: #4ade80;
+    --red: #f43f5e;
+    --cyan: #67e8f9;
+    --yellow: #facc15;
     --text: #ede9f6;
     --muted: #a39cb5;
+    --dim: #7b7390;
     --radius: 18px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,53 +44,68 @@
     overflow-x: hidden;
   }
   a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--lilac); outline-offset: 3px; border-radius: 6px; }
   .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
   .wrap { max-width: 1140px; margin: 0 auto; padding: 0 20px; }
+  svg.vio { display: block; overflow: visible; }
 
-  /* sfondo: griglia + bagliori che si muovono */
-  .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-  .bg::before {
-    content: ""; position: absolute; inset: 0;
-    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-    background-size: 56px 56px; opacity: .25;
-    mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 70%);
-  }
-  .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .45; animation: float 18s ease-in-out infinite; }
+  /* sfondo: stelle collegate + bagliori */
+  #sky { position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
+  .bg { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .4; animation: float 18s ease-in-out infinite; }
   .b1 { width: 520px; height: 520px; background: var(--purple-d); top: -160px; left: -120px; }
-  .b2 { width: 420px; height: 420px; background: #c026d3; top: 30%; right: -160px; animation-delay: -6s; opacity: .3; }
+  .b2 { width: 420px; height: 420px; background: #c026d3; top: 30%; right: -160px; animation-delay: -6s; opacity: .25; }
   .b3 { width: 380px; height: 380px; background: var(--purple-dd); bottom: -140px; left: 30%; animation-delay: -12s; }
   @keyframes float { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(60px,40px) scale(1.1); } 66% { transform: translate(-40px,70px) scale(.95); } }
+
+  /* barra di avanzamento della pagina */
+  #prog { position: fixed; top: 0; left: 0; height: 3px; width: 100%; z-index: 30; transform-origin: 0 50%; transform: scaleX(0);
+    background: linear-gradient(90deg, var(--purple-d), var(--pink)); }
 
   /* barra in alto */
   nav {
     position: sticky; top: 0; z-index: 10;
-    backdrop-filter: blur(14px); background: rgba(7,4,13,.6);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(7,4,13,.6);
     border-bottom: 1px solid transparent; transition: border-color .3s;
   }
   nav.scrolled { border-color: var(--line); }
-  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 16px; }
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; }
   .logo svg { width: 34px; }
   .logo span b { color: var(--purple); }
-  nav ul { display: flex; gap: 28px; list-style: none; font-size: 15px; color: var(--muted); }
-  nav ul a:hover { color: var(--text); }
-  .gh { border: 1px solid var(--line); padding: 7px 14px; border-radius: 999px; font-size: 14px; transition: .25s; }
+  nav ul { display: flex; gap: 26px; list-style: none; font-size: 15px; color: var(--muted); }
+  nav ul a { position: relative; transition: color .2s; }
+  nav ul a::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 2px; border-radius: 2px; background: var(--purple); transform: scaleX(0); transition: transform .25s; }
+  nav ul a:hover, nav ul a.on { color: var(--text); }
+  nav ul a.on::after { transform: scaleX(1); }
+  .gh { border: 1px solid var(--line); padding: 7px 14px; border-radius: 999px; font-size: 14px; transition: .25s; white-space: nowrap; }
   .gh:hover { border-color: var(--purple); box-shadow: 0 0 20px rgba(168,85,247,.35); }
 
   /* hero */
-  .hero { padding: 90px 0 70px; text-align: center; }
+  .hero { padding: 70px 0 40px; text-align: center; }
   .pill {
     display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--lilac);
     border: 1px solid var(--line); background: rgba(168,85,247,.08); padding: 6px 14px; border-radius: 999px;
   }
-  .pill i { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 10px #4ade80; animation: pulse 2s infinite; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2s infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
-  .vio-hero { display: block; width: 190px; margin: 34px auto 10px; filter: drop-shadow(0 0 40px rgba(168,85,247,.55)); animation: bob 3.2s ease-in-out infinite; cursor: pointer; }
+  .vio-stage { position: relative; width: 210px; margin: 30px auto 8px; }
+  .vio-hero { width: 210px; filter: drop-shadow(0 0 40px rgba(168,85,247,.55)); animation: bob 3.2s ease-in-out infinite; cursor: pointer; }
+  .vio-shadow { width: 150px; height: 14px; margin: 6px auto 0; border-radius: 50%; background: radial-gradient(rgba(168,85,247,.45), transparent 70%); animation: shadow 3.2s ease-in-out infinite; }
   @keyframes bob { 50% { transform: translateY(-12px); } }
+  @keyframes shadow { 50% { transform: scaleX(.8); opacity: .6; } }
+  .px-in rect { animation: pxIn .9s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: var(--d); }
+  @keyframes pxIn { from { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
   .bubble {
-    display: inline-block; font-size: 14px; padding: 8px 14px; border-radius: 12px; margin-bottom: 24px;
+    position: relative; display: inline-block; font-size: 14px; padding: 8px 14px; border-radius: 12px; margin: 10px 0 22px;
     background: rgba(168,85,247,.14); border: 1px solid var(--line); color: var(--lilac); min-height: 40px;
   }
+  .bubble::before { content: ""; position: absolute; top: -7px; left: 50%; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg);
+    background: #1d1230; border-left: 1px solid var(--line); border-top: 1px solid var(--line); }
+  .hearts { position: absolute; inset: 0; pointer-events: none; }
+  .heart { position: absolute; left: 50%; top: 30%; width: 14px; animation: heartUp 1.3s ease-out forwards; }
+  @keyframes heartUp { to { transform: translate(var(--x), -120px) scale(1.4); opacity: 0; } }
   h1 { font-size: clamp(40px, 7vw, 78px); line-height: 1.05; letter-spacing: -.04em; font-weight: 800; }
   .grad {
     background: linear-gradient(100deg, #f5d0fe, var(--purple) 40%, var(--pink) 70%, var(--purple));
@@ -89,10 +113,13 @@
     animation: shine 6s linear infinite;
   }
   @keyframes shine { to { background-position: 200% center; } }
-  .lead { max-width: 680px; margin: 22px auto 0; font-size: clamp(16px, 2.2vw, 19px); color: var(--muted); }
+  .rot { margin-top: 18px; font-size: clamp(15px, 2.4vw, 20px); color: var(--lilac); min-height: 1.6em; }
+  .rot .p { color: var(--purple); }
+  .caret { display: inline-block; width: .5em; height: 1.05em; background: var(--purple); vertical-align: -.18em; margin-left: 2px; animation: pulse 1s steps(1) infinite; }
+  .lead { max-width: 680px; margin: 16px auto 0; font-size: clamp(16px, 2.2vw, 19px); color: var(--muted); }
 
   /* bottoni di download */
-  .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 900px; margin: 44px auto 0; }
+  .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 900px; margin: 40px auto 0; }
   .dl {
     position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
     padding: 20px 22px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card);
@@ -116,89 +143,312 @@
     padding: 3px 9px; border-radius: 999px; background: rgba(244,114,182,.15); color: var(--pink); border: 1px solid rgba(244,114,182,.35);
   }
   .note { margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .note a { color: var(--lilac); }
+  .scroll-hint { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 40px; color: var(--muted); font-size: 13px; }
+  .scroll-hint i { width: 22px; height: 34px; border: 2px solid var(--line); border-radius: 12px; position: relative; }
+  .scroll-hint i::after { content: ""; position: absolute; left: 50%; top: 6px; width: 4px; height: 7px; margin-left: -2px; border-radius: 2px; background: var(--purple); animation: wheel 1.6s infinite; }
+  @keyframes wheel { to { transform: translateY(10px); opacity: 0; } }
 
-  /* terminale finto */
-  .term {
-    max-width: 820px; margin: 70px auto 0; text-align: left; border-radius: var(--radius); overflow: hidden;
-    border: 1px solid var(--line); background: #0b0712; box-shadow: 0 30px 80px -20px rgba(126,34,206,.5);
-  }
-  .term-top { display: flex; gap: 7px; padding: 12px 14px; background: #120b1e; border-bottom: 1px solid var(--line); }
-  .term-top i { width: 11px; height: 11px; border-radius: 50%; background: #3b2a55; }
-  .term-top i:first-child { background: #f43f5e; } .term-top i:nth-child(2) { background: #facc15; } .term-top i:nth-child(3) { background: #4ade80; }
-  .term pre { padding: 20px 22px; font-size: 14px; min-height: 260px; white-space: pre-wrap; color: #d4d0dc; }
-  .term .p { color: var(--purple); } .term .d { color: #7b7390; } .term .ok { color: #4ade80; } .term .c { color: #67e8f9; } .term .v { color: var(--lilac); font-weight: 600; }
-  .caret { display: inline-block; width: 8px; height: 16px; background: var(--purple); vertical-align: -3px; animation: pulse 1s steps(1) infinite; }
+  /* nastro dei comandi */
+  .marquee { border-block: 1px solid var(--line); background: rgba(15,10,26,.6); overflow: hidden; padding: 14px 0; margin-top: 30px;
+    mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+  .track { display: flex; gap: 14px; width: max-content; animation: slide 40s linear infinite; }
+  .marquee:hover .track { animation-play-state: paused; }
+  .track span { font-family: "JetBrains Mono", monospace; font-size: 14px; white-space: nowrap; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--line); background: rgba(168,85,247,.07); color: var(--muted); }
+  .track span b { color: var(--lilac); font-weight: 600; }
+  @keyframes slide { to { transform: translateX(-50%); } }
 
   /* sezioni */
-  section { padding: 100px 0; }
+  section { padding: 100px 0; scroll-margin-top: 50px; }
   .kicker { color: var(--purple); font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
   h2 { font-size: clamp(30px, 4.5vw, 48px); letter-spacing: -.03em; line-height: 1.1; margin: 10px 0 14px; }
-  .sub { color: var(--muted); max-width: 620px; }
+  .sub { color: var(--muted); max-width: 640px; }
   .center { text-align: center; } .center .sub { margin: 0 auto; }
+  code, kbd { font-family: "JetBrains Mono", monospace; font-size: 13px; background: #1a1029; border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; color: var(--lilac); }
+  kbd { border-bottom-width: 3px; }
 
+  /* ====== clip: Vio al lavoro ====== */
+  .player { margin-top: 46px; border-radius: 22px; border: 1px solid var(--line); background: var(--panel); overflow: hidden;
+    box-shadow: 0 40px 100px -30px rgba(126,34,206,.6); }
+  .p-top { display: flex; align-items: center; gap: 7px; padding: 12px 16px; background: var(--panel2); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .p-top i { width: 11px; height: 11px; border-radius: 50%; background: #3b2a55; }
+  .p-top i:nth-child(1) { background: var(--red); } .p-top i:nth-child(2) { background: var(--yellow); } .p-top i:nth-child(3) { background: var(--green); }
+  .p-top span { margin-left: 10px; }
+  .p-body { display: grid; grid-template-columns: 230px 1fr; min-height: 400px; }
+  .p-side { border-right: 1px solid var(--line); padding: 26px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
+    background: radial-gradient(ellipse at 50% 20%, rgba(168,85,247,.16), transparent 70%); }
+  .p-side .vio { width: 130px; filter: drop-shadow(0 0 24px rgba(168,85,247,.5)); animation: bob 3.2s ease-in-out infinite; }
+  .p-name { font-weight: 800; color: var(--lilac); }
+  .p-say { font-size: 14px; color: var(--text); min-height: 66px; }
+  .p-chip { font-family: "JetBrains Mono", monospace; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .p-chip b { color: var(--purple); }
+  .stage { position: relative; min-height: 400px; overflow: hidden; font-family: "JetBrains Mono", monospace; font-size: 14px; }
+  .stage.paused *, .stage.paused *::before, .stage.paused *::after { animation-play-state: paused !important; }
+  .scene { position: absolute; inset: 0; padding: 26px; animation: sceneIn .5s ease both; }
+  @keyframes sceneIn { from { opacity: 0; transform: translateY(14px); } }
+  .p-ctrl { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--panel2); }
+  .play { width: 38px; height: 38px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--purple); box-shadow: 0 0 18px rgba(168,85,247,.5); transition: transform .2s; }
+  .play:hover { transform: scale(1.08); }
+  .play svg { width: 14px; height: 14px; fill: #fff; }
+  .chaps { flex: 1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .chap { text-align: left; font-size: 12px; color: var(--muted); padding: 2px 0; }
+  .chap .bar { display: block; height: 4px; border-radius: 4px; background: #2a1d40; overflow: hidden; margin-bottom: 6px; }
+  .chap .bar i { display: block; height: 100%; width: 100%; transform-origin: 0 50%; transform: scaleX(0); background: linear-gradient(90deg, var(--purple), var(--pink)); }
+  .chap.on { color: var(--text); }
+  .chap:hover { color: var(--lilac); }
+
+  /* scena: chiedi */
+  .ask { height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 18px; }
+  .ask-hint { color: var(--dim); font-size: 13px; }
+  .ask-box { font-size: clamp(15px, 2vw, 19px); padding: 18px 20px; border-radius: 14px; border: 1px solid var(--purple); background: #150c24;
+    box-shadow: 0 0 0 4px rgba(168,85,247,.12), 0 20px 50px -20px rgba(168,85,247,.6); min-height: 66px; }
+  .ask-box .p { color: var(--purple); margin-right: 8px; }
+  .ask-keys { display: flex; gap: 8px; align-items: center; color: var(--dim); font-size: 13px; }
+  .press { animation: press .35s ease; }
+  @keyframes press { 50% { transform: translateY(3px) scale(.94); background: var(--purple); color: #fff; } }
+  .sent { animation: sent .6s ease forwards; }
+  @keyframes sent { to { transform: translateY(-30px); opacity: .0; } }
+
+  /* scena: legge */
+  .read { display: grid; grid-template-columns: 1fr 1.25fr; gap: 22px; height: 100%; }
+  .pane { border: 1px solid var(--line); border-radius: 12px; background: rgba(15,10,26,.8); padding: 14px; overflow: hidden; }
+  .pane h4 { font-family: Inter, sans-serif; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; }
+  .tree { list-style: none; display: grid; gap: 3px; font-size: 13px; }
+  .tree li { padding: 4px 8px; border-radius: 6px; color: var(--muted); transition: background .25s, color .25s; }
+  .tree li.scan { background: rgba(168,85,247,.22); color: var(--text); }
+  .tree li.ok::after { content: " ✓"; color: var(--green); }
+  .plan { list-style: none; display: grid; gap: 10px; font-size: 13px; }
+  .plan li { display: flex; gap: 10px; opacity: 0; transform: translateX(14px); transition: .45s; }
+  .plan li.in { opacity: 1; transform: none; }
+  .plan li b { color: var(--lilac); font-weight: 600; }
+  .plan li::before { content: attr(data-n); flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--purple-dd); color: #fff; font-size: 11px; }
+  .scanbar { position: absolute; left: 26px; right: 26px; height: 2px; background: linear-gradient(90deg, transparent, var(--purple), transparent); top: 26px; animation: scanY 1.6s ease-in-out infinite; opacity: .6; }
+  @keyframes scanY { 50% { top: calc(100% - 28px); } }
+
+  /* scena: team */
+  .net { width: 100%; height: 100%; }
+  .net .ln { stroke: var(--purple); stroke-width: 2; opacity: .5; transition: stroke-dashoffset .7s ease; }
+  .net .fl { stroke: var(--lilac); stroke-width: 2.5; stroke-dasharray: 3 14; opacity: 0; transition: opacity .3s; animation: flow 1s linear infinite; }
+  .net .fl.on { opacity: .9; }
+  @keyframes flow { to { stroke-dashoffset: -17; } }
+  .net .nd { opacity: 0; transform: scale(.4); transform-box: fill-box; transform-origin: center; transition: .45s cubic-bezier(.2,.9,.3,1.4); }
+  .net .nd.on { opacity: 1; transform: none; }
+  .net rect.box { fill: #1a1029; stroke: var(--purple); stroke-width: 1.5; }
+  .net text { fill: var(--text); font-family: Inter, sans-serif; font-size: 15px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+  .net text.ic { font-size: 16px; }
+  .net .router { fill: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 14px; font-weight: 400; }
+  .net .router tspan.m { fill: var(--pink); font-weight: 600; }
+  .net .core { fill: #1a1029; stroke: var(--purple); stroke-width: 2; }
+  .net .halo { fill: none; stroke: var(--purple); opacity: .5; transform-box: fill-box; transform-origin: center; animation: halo 2s ease-out infinite; }
+  @keyframes halo { from { transform: scale(1); opacity: .6; } to { transform: scale(1.7); opacity: 0; } }
+
+  /* scena: scrive */
+  .ed { height: 100%; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: rgba(12,7,20,.9); display: flex; flex-direction: column; }
+  .tabs { display: flex; background: var(--panel2); border-bottom: 1px solid var(--line); font-size: 12px; }
+  .tabs span { padding: 8px 14px; color: var(--dim); border-right: 1px solid var(--line); transition: .3s; }
+  .tabs span.on { color: var(--text); background: rgba(12,7,20,.9); box-shadow: inset 0 2px var(--purple); }
+  .tabs span.ok::after { content: " ✓"; color: var(--green); }
+  .tabs em { margin-left: auto; padding: 8px 14px; font-style: normal; color: var(--green); }
+  .code { padding: 10px 0; font-size: 13px; line-height: 1.65; overflow: hidden; flex: 1; }
+  .code .l { display: block; white-space: pre; padding: 0 14px 0 0; opacity: 0; transform: translateX(-8px); transition: .25s; }
+  .code .l::before { content: attr(data-g); display: inline-block; width: 42px; padding-right: 12px; text-align: right; color: #4a3d63; }
+  .code .l.in { opacity: 1; transform: none; }
+  .code .l.add { background: rgba(74,222,128,.09); }
+  .code .l.add::before { content: "+"; color: var(--green); }
+  .code .l.del { background: rgba(244,63,94,.12); text-decoration: line-through; text-decoration-color: rgba(244,63,94,.5); }
+  .code .l.del::before { content: "-"; color: var(--red); }
+  .k { color: #c084fc; } .s { color: #86efac; } .f { color: var(--cyan); } .n { color: #fbbf24; } .cm { color: var(--dim); }
+
+  /* scena: test */
+  .tt { height: 100%; border: 1px solid var(--line); border-radius: 12px; background: rgba(12,7,20,.9); padding: 16px 18px; font-size: 13.5px; line-height: 1.75; overflow: hidden; }
+  .tt div { white-space: pre-wrap; animation: sceneIn .3s ease both; }
+  .tt .p { color: var(--purple); } .tt .ok { color: var(--green); } .tt .err { color: var(--red); } .tt .d { color: var(--dim); } .tt .c { color: var(--cyan); }
+  .tt .v { color: var(--lilac); font-weight: 600; }
+  .dots i { font-style: normal; color: var(--green); } .dots i.x { color: var(--red); }
+  .shake { animation: shake .45s ease; }
+  @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+
+  /* scena: fatto */
+  .fin { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; text-align: center; }
+  .fin h3 { font-family: Inter, sans-serif; font-size: clamp(26px, 4vw, 38px); letter-spacing: -.03em; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; max-width: 560px; }
+  .kpi { border: 1px solid var(--line); border-radius: 12px; padding: 12px 6px; background: rgba(24,14,40,.8); opacity: 0; transform: translateY(12px); transition: .4s; }
+  .kpi.in { opacity: 1; transform: none; }
+  .kpi b { display: block; font-family: Inter, sans-serif; font-size: 24px; color: var(--lilac); }
+  .kpi span { font-size: 11px; color: var(--muted); }
+  .fake-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; font-size: 13px; }
+  .fake-btns span { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); }
+  .fake-btns span:first-child { background: var(--purple); border-color: transparent; }
+  .conf { position: absolute; left: 50%; top: 45%; width: 8px; height: 8px; pointer-events: none; animation: conf 1.5s cubic-bezier(.1,.7,.3,1) forwards; }
+  @keyframes conf { to { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 0; } }
+
+  /* ====== facce di Vio ====== */
+  .faces { display: grid; grid-template-columns: 1fr 1.2fr; gap: 40px; align-items: center; margin-top: 46px; }
+  .face-big { text-align: center; padding: 40px 20px; border-radius: 26px; border: 1px solid var(--line);
+    background: radial-gradient(ellipse at 50% 30%, rgba(168,85,247,.22), transparent 65%), var(--bg2); }
+  .face-big .vio { width: 220px; margin: 0 auto; filter: drop-shadow(0 0 36px rgba(168,85,247,.55)); animation: bob 3.2s ease-in-out infinite; }
+  .face-big .bubble { margin-top: 26px; min-width: 60%; }
+  .face-big .fname { font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--muted); }
+  .face-big .fname b { color: var(--purple); }
+  .face-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .face { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); font-size: 13px; color: var(--muted); transition: .2s; }
+  .face .vio { width: 56px; }
+  .face:hover { border-color: rgba(168,85,247,.6); color: var(--text); transform: translateY(-2px); }
+  .face.on { border-color: var(--purple); color: var(--text); background: rgba(168,85,247,.16); box-shadow: 0 0 24px -6px rgba(168,85,247,.6); }
+  .face small { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--dim); }
+  .kbd-flash { animation: press .4s ease; }
+  .face-tip { margin-top: 16px; font-size: 14px; color: var(--muted); }
+
+  /* ====== team ====== */
+  .team { display: grid; grid-template-columns: 1fr 1.1fr; gap: 40px; align-items: center; margin-top: 46px; }
+  .mode-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .mode-btn { padding: 10px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); font-family: "JetBrains Mono", monospace; font-size: 13px; color: var(--muted); transition: .2s; }
+  .mode-btn:hover { color: var(--text); border-color: rgba(168,85,247,.6); }
+  .mode-btn.on { background: var(--purple); color: #fff; border-color: transparent; box-shadow: 0 8px 26px -8px rgba(168,85,247,.8); }
+  .mode-info { margin-top: 22px; padding: 22px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
+  .mode-info .count { font-size: 48px; font-weight: 800; letter-spacing: -.03em; line-height: 1; color: var(--lilac); }
+  .mode-info .count small { font-size: 16px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+  .mode-info p { color: var(--muted); margin: 10px 0 16px; min-height: 52px; }
+  .meter { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .meter span { height: 6px; border-radius: 6px; background: #221638; overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--purple-d), var(--pink)); transition: width .8s cubic-bezier(.2,.8,.2,1); }
+  .constel { position: relative; }
+  .constel > svg { width: 100%; height: auto; display: block; }
+  .constel .spoke { stroke: var(--purple); stroke-width: 1.4; stroke-dasharray: 3 6; opacity: 0; transition: opacity .4s; animation: flow 1.2s linear infinite; }
+  .constel .spoke.on { opacity: .75; }
+  .constel .ring { fill: none; stroke: var(--line); stroke-dasharray: 2 6; }
+  .constel .dot { fill: #2a1d40; stroke: #3b2a55; stroke-width: 1.5; transition: fill .4s, stroke .4s, r .4s; cursor: pointer; }
+  .constel .dot.on { fill: var(--purple); stroke: var(--lilac); filter: drop-shadow(0 0 6px var(--purple)); }
+  .constel .dot.ultra.on { fill: var(--pink); stroke: #fbcfe8; filter: drop-shadow(0 0 6px var(--pink)); }
+  .tip { position: absolute; pointer-events: none; transform: translate(-50%, -140%); padding: 5px 10px; border-radius: 8px; font-size: 12px; white-space: nowrap;
+    background: #1d1230; border: 1px solid var(--purple); opacity: 0; transition: opacity .15s; }
+  .tip.show { opacity: 1; }
+  .legend { display: flex; gap: 18px; justify-content: center; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+  /* ====== funzioni ====== */
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 50px; }
   .stat { text-align: center; padding: 26px 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
   .stat b { display: block; font-size: 44px; font-weight: 800; letter-spacing: -.03em; color: var(--lilac); }
   .stat span { color: var(--muted); font-size: 14px; }
-
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 50px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 30px; }
   .card {
     position: relative; padding: 26px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line);
-    transition: transform .3s, border-color .3s;
+    transition: transform .3s, border-color .3s; transform-style: preserve-3d;
   }
   .card::before {
-    content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity .3s;
+    content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity .3s; pointer-events: none;
     background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 50%), rgba(168,85,247,.18), transparent 60%);
   }
-  .card:hover { transform: translateY(-4px); border-color: rgba(168,85,247,.5); }
+  .card:hover { border-color: rgba(168,85,247,.5); }
   .card:hover::before { opacity: 1; }
   .card .ic {
     width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; margin-bottom: 16px;
-    background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(88,28,135,.3)); border: 1px solid var(--line);
+    background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(88,28,135,.3)); border: 1px solid var(--line); transition: transform .4s;
   }
+  .card:hover .ic { transform: rotate(-8deg) scale(1.1); }
   .card h3 { font-size: 18px; margin-bottom: 6px; }
   .card p { color: var(--muted); font-size: 15px; }
 
-  /* modalità */
-  .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 44px; }
-  .mode { padding: 22px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
-  .mode .mono { color: var(--purple); font-weight: 600; }
-  .mode .bar { height: 5px; border-radius: 5px; background: #221638; margin: 12px 0; overflow: hidden; }
-  .mode .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--purple-d), var(--pink)); transition: width 1.4s cubic-bezier(.2,.8,.2,1); }
-  .mode.in .bar i { width: var(--w); }
-  .mode p { color: var(--muted); font-size: 14px; }
-
-  /* screenshot */
-  .shots { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; margin-top: 50px; align-items: start; }
-  .shot { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: #0b0712; box-shadow: 0 20px 60px -20px rgba(126,34,206,.5); }
-  .shot img { display: block; width: 100%; height: auto; }
-  .shot figcaption { padding: 12px 16px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
-  .shots .col { display: grid; gap: 20px; }
-
-  /* studio */
-  .studio { display: grid; grid-template-columns: 1fr 1.2fr; gap: 50px; align-items: center; }
+  /* ====== studio ====== */
+  .studio { display: grid; grid-template-columns: .85fr 1.25fr; gap: 46px; align-items: center; }
   .studio ul { list-style: none; margin: 22px 0 28px; display: grid; gap: 10px; }
-  .studio li { display: flex; gap: 10px; color: var(--muted); }
-  .studio li::before { content: "✦"; color: var(--purple); }
+  .studio li { position: relative; padding-left: 24px; color: var(--muted); }
+  .studio li::before { content: "✦"; position: absolute; left: 0; color: var(--purple); }
   .btn {
     display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 12px; font-weight: 600;
     background: linear-gradient(135deg, var(--purple-d), var(--purple)); box-shadow: 0 10px 30px -10px rgba(168,85,247,.8); transition: transform .2s;
   }
   .btn:hover { transform: translateY(-2px); }
-  .btn.ghost { background: transparent; border: 1px solid var(--line); box-shadow: none; }
+  .sw { border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0d0816; box-shadow: 0 30px 80px -24px rgba(126,34,206,.6); font-family: "JetBrains Mono", monospace; }
+  .sw-top { display: flex; align-items: center; gap: 7px; padding: 9px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  .sw-top i { width: 10px; height: 10px; border-radius: 50%; background: #3b2a55; }
+  .sw-top span { margin: 0 auto; }
+  .sw-body { display: grid; grid-template-columns: 38px 1fr 190px; height: 330px; }
+  .sw-act { background: #0a0611; border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 12px; }
+  .sw-act i { width: 16px; height: 16px; border-radius: 4px; border: 2px solid #3b2a55; }
+  .sw-act i.on { border-color: var(--purple); }
+  .sw-ed { position: relative; padding: 12px 0; font-size: 12.5px; line-height: 1.7; overflow: hidden; }
+  .sw-ed .l { display: block; white-space: pre; padding-right: 10px; transition: background .3s; }
+  .sw-ed .l::before { content: attr(data-g); display: inline-block; width: 34px; padding-right: 10px; text-align: right; color: #4a3d63; }
+  .sw-ed .l.sel { background: rgba(168,85,247,.25); }
+  .sw-ed .l.add { background: rgba(74,222,128,.1); animation: sceneIn .3s both; }
+  .sw-ed .l.add::before { content: "+"; color: var(--green); }
+  .sw-ed .l.del { background: rgba(244,63,94,.13); }
+  .sw-ed .l.del::before { content: "-"; color: var(--red); }
+  .inl { margin: 4px 10px 4px 34px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--purple); background: #1a1029; font-size: 12px; box-shadow: 0 10px 30px -10px rgba(168,85,247,.7); animation: sceneIn .3s both; }
+  .inl .p { color: var(--purple); }
+  .inl .acts { display: flex; gap: 8px; margin-top: 8px; }
+  .inl .acts span { padding: 3px 9px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  .inl .acts span.ok { background: var(--purple); color: #fff; border-color: transparent; }
+  .keys { position: absolute; right: 14px; top: 12px; display: flex; gap: 6px; opacity: 0; transition: opacity .2s; }
+  .keys.on { opacity: 1; }
+  .keys kbd { font-size: 13px; padding: 4px 9px; }
+  .sw-chat { border-left: 1px solid var(--line); background: #0a0611; padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 11.5px; font-family: Inter, sans-serif; }
+  .sw-chat .vio { width: 58px; margin: 4px auto 0; }
+  .sw-chat .msg { padding: 8px 10px; border-radius: 10px; background: rgba(168,85,247,.14); border: 1px solid var(--line); color: var(--lilac); min-height: 52px; }
+  .sw-chat .ctx { margin-top: auto; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--dim); }
 
-  /* installazione */
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; counter-reset: s; }
-  .step { padding: 26px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
+  /* ====== galleria ====== */
+  .gtabs { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 36px; }
+  .gtab { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-size: 14px; color: var(--muted); transition: .2s; position: relative; overflow: hidden; }
+  .gtab:hover { color: var(--text); }
+  .gtab.on { color: #fff; background: var(--purple-d); border-color: var(--purple); }
+  .gtab.on::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--lilac); transform-origin: 0 50%; animation: gtimer 6s linear forwards; }
+  .gtab.hold::after { animation: none; transform: scaleX(0); }
+  @keyframes gtimer { from { transform: scaleX(0); } }
+  .gframe { position: relative; margin: 26px auto 0; max-width: 980px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #0b0b0b; box-shadow: 0 30px 80px -24px rgba(126,34,206,.55); aspect-ratio: 16 / 10; }
+  .gframe img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: top center; opacity: 0; transform: scale(1.02); transition: opacity .6s, transform .8s; }
+  .gframe img.on { opacity: 1; transform: none; }
+  .gcap { text-align: center; color: var(--muted); margin-top: 14px; min-height: 1.6em; }
+
+  /* ====== privacy ====== */
+  .priv { display: grid; grid-template-columns: 1.05fr 1fr; gap: 50px; align-items: center; }
+  .pc { position: relative; aspect-ratio: 1.25; border-radius: 26px; border: 2px solid var(--purple); background: radial-gradient(circle at 50% 50%, rgba(168,85,247,.22), transparent 60%), var(--bg2);
+    box-shadow: 0 0 0 8px rgba(168,85,247,.08), 0 30px 80px -24px rgba(126,34,206,.6); overflow: hidden; }
+  .pc-label { position: absolute; top: 14px; left: 18px; font-size: 13px; color: var(--lilac); font-weight: 600; }
+  .pc .vio { position: absolute; left: 50%; top: 50%; width: 110px; transform: translate(-50%, -50%); }
+  .orbit { position: absolute; left: 50%; top: 50%; width: 0; height: 0; animation: spin 14s linear infinite; }
+  .orbit span { position: absolute; width: 0; height: 0; transform: rotate(var(--a)) translateX(var(--r)); }
+  .orbit span b { position: absolute; left: 0; top: 0; translate: -50% -50%; font-size: 12px; font-family: "JetBrains Mono", monospace; font-weight: 400; white-space: nowrap;
+    padding: 4px 8px; border-radius: 7px; background: #1a1029; border: 1px solid var(--line); rotate: calc(-1 * var(--a)); animation: spin 14s linear infinite reverse; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .wall { position: absolute; right: 0; top: 0; bottom: 0; width: 4px; background: repeating-linear-gradient(var(--purple) 0 10px, transparent 10px 18px); opacity: .5; }
+  .cloud { position: absolute; right: 14px; top: 16px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .cloud s { color: var(--dim); }
+  .hw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 60px; }
+  .hwc { padding: 18px; border-radius: 16px; border: 1px solid var(--line); background: var(--card); }
+  .hwc b { display: block; font-size: 16px; margin-bottom: 4px; }
+  .hwc span { font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: var(--lilac); }
+  .hwc p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .hwc .chips { display: flex; gap: 3px; margin-bottom: 12px; }
+  .hwc .chips i { width: 10px; height: 16px; border-radius: 2px; background: #2a1d40; }
+  .hwc .chips i.on { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+
+  /* ====== installazione ====== */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; counter-reset: s; position: relative; }
+  .step { position: relative; padding: 26px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
   .step::before {
     counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
     background: var(--purple); font-weight: 800; margin-bottom: 14px; box-shadow: 0 0 20px rgba(168,85,247,.6);
   }
   .step h3 { font-size: 17px; margin-bottom: 8px; }
   .step p { color: var(--muted); font-size: 14px; }
-  code { font-family: "JetBrains Mono", monospace; font-size: 13px; background: #1a1029; border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; color: var(--lilac); }
+  .step p a { color: var(--lilac); }
+  .copy { margin-top: 12px; display: inline-flex; align-items: center; gap: 8px; font-family: "JetBrains Mono", monospace; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: #1a1029; color: var(--lilac); transition: .2s; }
+  .copy:hover { border-color: var(--purple); }
 
-  /* MyCode */
+  /* ====== FAQ ====== */
+  .faq { max-width: 780px; margin: 40px auto 0; display: grid; gap: 10px; }
+  .faq details { border: 1px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden; transition: border-color .2s; }
+  .faq details[open] { border-color: rgba(168,85,247,.6); }
+  .faq summary { list-style: none; cursor: pointer; padding: 16px 20px; font-weight: 600; display: flex; justify-content: space-between; gap: 16px; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; color: var(--purple); font-size: 22px; line-height: 1; transition: transform .3s; }
+  .faq details[open] summary::after { transform: rotate(45deg); }
+  .faq details p { padding: 0 20px 18px; color: var(--muted); animation: sceneIn .35s ease; }
+
+  /* ====== MyCode ====== */
   .mycode {
     position: relative; overflow: hidden; text-align: center; padding: 60px 30px; border-radius: 26px;
     border: 1px solid var(--line); background: radial-gradient(ellipse at top, rgba(168,85,247,.25), transparent 60%), var(--bg2);
@@ -206,28 +456,63 @@
   .mycode .progress { max-width: 420px; margin: 28px auto 0; height: 8px; border-radius: 8px; background: #221638; overflow: hidden; }
   .mycode .progress i { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, var(--purple), var(--pink), var(--purple)); background-size: 200%; animation: load 2.5s ease-in-out infinite; }
   @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+  .brain { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--dim); margin-top: 14px; height: 1.6em; overflow: hidden; }
 
   footer { border-top: 1px solid var(--line); padding: 40px 0; color: var(--muted); font-size: 14px; }
   footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+  footer a { color: var(--lilac); }
+
+  /* Vio che ti accompagna */
+  .guide { position: fixed; right: 18px; bottom: 18px; z-index: 15; display: flex; align-items: flex-end; gap: 10px; opacity: 0; transform: translateY(30px); transition: .4s; pointer-events: none; }
+  .guide.show { opacity: 1; transform: none; pointer-events: auto; }
+  .guide .vio { width: 62px; cursor: pointer; filter: drop-shadow(0 0 14px rgba(168,85,247,.6)); animation: bob 3.2s ease-in-out infinite; }
+  .guide .gb { max-width: 230px; font-size: 13px; padding: 8px 12px; border-radius: 12px 12px 4px 12px; background: #1d1230; border: 1px solid var(--purple); color: var(--lilac);
+    box-shadow: 0 10px 30px rgba(0,0,0,.5); transition: opacity .3s, transform .3s; }
+  .guide .gb.hide { opacity: 0; transform: translateX(10px); }
 
   /* comparsa allo scroll */
   .reveal { opacity: 0; transform: translateY(30px); transition: opacity .8s ease, transform .8s ease; }
   .reveal.in { opacity: 1; transform: none; }
 
-  /* toast */
   .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 120px); z-index: 20; transition: transform .4s cubic-bezier(.2,.9,.3,1.3);
-    background: #1a1029; border: 1px solid var(--purple); padding: 12px 18px; border-radius: 12px; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.5);
+    position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 120px); z-index: 20; transition: transform .4s cubic-bezier(.2,.9,.3,1.3), opacity .4s;
+    background: #1a1029; border: 1px solid var(--purple); padding: 12px 18px; border-radius: 12px; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.5); opacity: 0;
+    max-width: calc(100% - 32px);
   }
-  .toast { opacity: 0; }
   .toast.show { transform: translate(-50%, 0); opacity: 1; }
 
-  @media (max-width: 900px) {
+  @media (max-width: 960px) {
     nav ul { display: none; }
     .downloads, .grid, .steps { grid-template-columns: 1fr; }
-    .modes, .stats { grid-template-columns: repeat(2, 1fr); }
-    .shots, .studio { grid-template-columns: 1fr; }
+    .stats, .hw { grid-template-columns: repeat(2, 1fr); }
+    .studio, .faces, .team, .priv { grid-template-columns: 1fr; }
     section { padding: 70px 0; }
+    .p-body { grid-template-columns: 1fr; }
+    .p-side { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; text-align: left; gap: 14px; }
+    .p-side .vio { width: 70px; flex: none; }
+    .p-side .p-name, .p-side .p-chip { display: none; }
+    .p-say { min-height: 0; }
+    .chaps { gap: 5px; }
+    .chap { font-size: 0; }
+    .chap.on { font-size: 11px; }
+    .chaps { grid-template-columns: repeat(6, 1fr); }
+    .read { grid-template-columns: 1fr; gap: 12px; }
+    .read .pane:first-child { display: none; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .sw-body { grid-template-columns: 1fr; height: 360px; }
+    .sw-act, .sw-chat { display: none; }
+  }
+  @media (max-width: 520px) {
+    .scene { padding: 16px; }
+    .face-list { grid-template-columns: repeat(3, 1fr); }
+    .face { padding: 10px 4px; font-size: 12px; }
+    .face small { display: none; }
+    .mode-btn { font-size: 11px; }
+    .code { font-size: 11px; }
+    .code .l::before { width: 28px; padding-right: 8px; }
+    .sw-ed { font-size: 11px; }
+    .guide { display: none; }
+    .stat b { font-size: 34px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -236,16 +521,21 @@
 </style>
 </head>
 <body>
+<div id="prog"></div>
 <div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+<canvas id="sky"></canvas>
 
 <nav id="nav">
   <div class="wrap">
-    <a href="#" class="logo"><svg class="vio" data-eyes="open" data-mouth="smile"></svg><span>My<b>Dev</b>Agent</span></a>
+    <a href="#" class="logo"><svg class="vio" data-expr="done"></svg><span>My<b>Dev</b>Agent</span></a>
     <ul>
+      <li><a href="#clip">Guarda</a></li>
+      <li><a href="#vio">Vio</a></li>
+      <li><a href="#team">Il team</a></li>
       <li><a href="#funzioni">Funzioni</a></li>
       <li><a href="#studio">Studio</a></li>
       <li><a href="#installa">Installa</a></li>
-      <li><a href="#mycode">MyCode</a></li>
+      <li><a href="#faq">FAQ</a></li>
     </ul>
     <a class="gh" href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent" target="_blank" rel="noopener">★ GitHub</a>
   </div>
@@ -254,9 +544,14 @@
 <header class="hero">
   <div class="wrap">
     <span class="pill reveal"><i></i> Gratis · open source · funziona offline</span>
-    <svg class="vio vio-hero" id="vioHero" data-eyes="open" data-mouth="smile" aria-label="Vio, il polpetto viola di MyDevAgent"></svg>
+    <div class="vio-stage">
+      <svg class="vio vio-hero" id="vioHero" data-expr="ask" role="img" aria-label="Vio, il polpetto viola di MyDevAgent. Cliccalo!"></svg>
+      <div class="vio-shadow"></div>
+      <div class="hearts" id="heroHearts"></div>
+    </div>
     <div><span class="bubble" id="bubble">Ciao! Sono Vio 👋</span></div>
     <h1 class="reveal">Un team di <span class="grad">35 agenti AI</span><br>sul tuo PC.</h1>
+    <p class="rot mono reveal" aria-hidden="true"><span class="p">›</span> <span id="rot"></span><span class="caret"></span></p>
     <p class="lead reveal">MyDevAgent legge il tuo progetto, scrive il codice, lancia i test e si corregge da solo. Tutto in locale con Ollama: i tuoi file non lasciano mai il computer.</p>
 
     <div class="downloads reveal">
@@ -271,15 +566,95 @@
         <span class="ic">🧠</span><strong>MyCode</strong><small>Il nostro modello AI · in addestramento</small>
       </a>
     </div>
-    <p class="note">Serve <a href="https://ollama.com" target="_blank" rel="noopener" style="color:var(--lilac)">Ollama</a> e Python 3.10+. Lo Studio li installa da solo.</p>
-
-    <div class="term reveal">
-      <div class="term-top"><i></i><i></i><i></i></div>
-      <pre class="mono" id="term"></pre>
-    </div>
+    <p class="note">Serve <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> e Python 3.10+. Lo Studio li installa da solo.</p>
+    <a class="scroll-hint" href="#clip"><i></i>Guarda Vio al lavoro</a>
   </div>
 </header>
 
+<div class="marquee" aria-hidden="true">
+  <div class="track" id="track"></div>
+</div>
+
+<!-- ====== CLIP ====== -->
+<section id="clip">
+  <div class="wrap">
+    <div class="center reveal">
+      <p class="kicker">Guarda Vio al lavoro</p>
+      <h2>Dalla tua richiesta al codice che funziona.<br><span class="grad">In sei passi.</span></h2>
+      <p class="sub">Chiedi una cosa in italiano. Vio legge il progetto, chiama gli agenti giusti, scrive il codice, lancia i test e, se qualcosa non va, si corregge da solo.</p>
+    </div>
+
+    <div class="player reveal" id="player">
+      <div class="p-top"><i></i><i></i><i></i><span class="mono">~/progetti/snake · mydevagent</span></div>
+      <div class="p-body">
+        <div class="p-side">
+          <svg class="vio" id="clipVio" data-expr="ask" aria-hidden="true"></svg>
+          <div>
+            <div class="p-name">Vio</div>
+            <div class="p-say" id="clipSay" aria-live="polite"></div>
+          </div>
+          <div class="p-chip" id="clipChip">team <b>auto</b></div>
+        </div>
+        <div class="stage" id="stage" aria-label="Animazione: come lavora MyDevAgent"></div>
+      </div>
+      <div class="p-ctrl">
+        <button class="play" id="playBtn" aria-label="Pausa"></button>
+        <div class="chaps" id="chaps"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== FACCE DI VIO ====== -->
+<section id="vio">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker">Conosci Vio</p>
+      <h2>Un polpetto con otto tentacoli<br><span class="grad">e tante facce.</span></h2>
+      <p class="sub">Vio vive sopra la barra dove scrivi. Cambia faccia con la modalità (<kbd>Shift</kbd>+<kbd>Tab</kbd>), sbatte le palpebre, fa gli occhi a X sugli errori e i cuoricini con <code>/vio</code>. Prova a cliccare le facce.</p>
+    </div>
+    <div class="faces">
+      <div class="face-big reveal">
+        <svg class="vio" id="faceVio" data-expr="ask" aria-hidden="true"></svg>
+        <div><span class="bubble" id="faceSay">Ti chiedo conferma prima di ogni modifica.</span></div>
+        <p class="fname">modalità <b id="faceName">ask</b></p>
+      </div>
+      <div class="reveal">
+        <div class="face-list" id="faceList"></div>
+        <p class="face-tip">Le prime cinque sono le modalità: nel terminale passi da una all'altra con <kbd id="stKey">Shift+Tab</kbd>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== TEAM ====== -->
+<section id="team">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker">Il team</p>
+      <h2>Scegli quanti agenti mettere al lavoro.</h2>
+      <p class="sub">Un router tiene veloci le richieste semplici e chiama il team completo solo quando serve davvero. Passa il mouse sui puntini per vedere chi sono.</p>
+    </div>
+    <div class="team">
+      <div class="reveal">
+        <div class="mode-btns" id="modeBtns"></div>
+        <div class="mode-info">
+          <div class="count"><span id="modeCount">1</span><small id="modeWord">agente</small></div>
+          <p id="modeDesc"></p>
+          <div class="meter">Velocità <span><i id="mSpeed"></i></span></div>
+          <div class="meter">Profondità <span><i id="mDepth"></i></span></div>
+        </div>
+      </div>
+      <div class="constel reveal" id="constel">
+        <svg viewBox="-210 -210 420 420" id="constelSvg" aria-hidden="true"></svg>
+        <div class="tip" id="tip"></div>
+        <div class="legend"><span><i style="background:var(--purple)"></i>15 agenti del nucleo</span><span><i style="background:var(--pink)"></i>20 agenti ultra-deep</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== FUNZIONI ====== -->
 <section id="funzioni">
   <div class="wrap">
     <div class="center reveal">
@@ -290,7 +665,7 @@
 
     <div class="stats">
       <div class="stat reveal"><b data-count="35">0</b><span>agenti specializzati</span></div>
-      <div class="stat reveal"><b data-count="4">0</b><span>modalità di lavoro</span></div>
+      <div class="stat reveal"><b data-count="5">0</b><span>modalità di Vio</span></div>
       <div class="stat reveal"><b data-count="100" data-suffix="%">0</b><span>locale e privato</span></div>
       <div class="stat reveal"><b data-count="0" data-prefix="€ ">0</b><span>per sempre</span></div>
     </div>
@@ -309,59 +684,119 @@
   </div>
 </section>
 
-<section id="modi">
-  <div class="wrap">
-    <div class="reveal">
-      <p class="kicker">Il team</p>
-      <h2>Scegli quanti agenti mettere al lavoro.</h2>
-      <p class="sub">Un router tiene veloci le richieste semplici e chiama il team completo solo quando serve davvero.</p>
-    </div>
-    <div class="modes">
-      <div class="mode reveal" style="--w:15%"><span class="mono">/fast</span><div class="bar"><i></i></div><p>Un solo specialista. Risposte in pochi secondi.</p></div>
-      <div class="mode reveal" style="--w:40%"><span class="mono">/balanced</span><div class="bar"><i></i></div><p>Architetto, agente, test e review sul diff reale.</p></div>
-      <div class="mode reveal" style="--w:65%"><span class="mono">/deep</span><div class="bar"><i></i></div><p>In più sicurezza, performance e casi limite.</p></div>
-      <div class="mode reveal" style="--w:100%"><span class="mono">/ultra-deep</span><div class="bar"><i></i></div><p>Tutti i 35 agenti, 25 revisioni in parallelo.</p></div>
-    </div>
-
-    <div class="shots">
-      <figure class="shot reveal"><img src="img/terminale.png" alt="MyDevAgent nel terminale con Vio sopra la barra di input"><figcaption>Il terminale di MyDevAgent, con Vio che ti tiene compagnia.</figcaption></figure>
-      <figure class="shot reveal"><img src="img/agenti.png" alt="La lista dei sotto-agenti di MyDevAgent"><figcaption>Sotto-agenti con contesto separato.</figcaption></figure>
-    </div>
-  </div>
-</section>
-
+<!-- ====== STUDIO ====== -->
 <section id="studio">
   <div class="wrap studio">
     <div class="reveal">
       <p class="kicker">MyDevAgent Studio</p>
       <h2>Il tuo editor, <span class="grad">con Vio dentro.</span></h2>
-      <p class="sub">Un editor completo basato su VSCodium, già pronto con MyDevAgent. Un solo setup installa tutto.</p>
+      <p class="sub">Un editor completo basato su VSCodium, già pronto con MyDevAgent. Selezioni il codice, premi <kbd>Ctrl</kbd>+<kbd>I</kbd>, dici cosa vuoi e Vio lo cambia al posto tuo.</p>
       <ul>
         <li>Installa da solo Python, Ollama e MyDevAgent</li>
         <li>Chat con Vio nella barra laterale</li>
-        <li>Modifiche nel codice con <code>Ctrl+I</code></li>
+        <li>Modifiche nel codice con <code>Ctrl+I</code>, da accettare o scartare</li>
         <li>Tema nero e viola, statistiche integrate</li>
       </ul>
       <a class="btn" href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent/releases/latest/download/MyDevAgent-Studio-Setup.exe">⬇ Scarica il setup per Windows</a>
     </div>
-    <figure class="shot reveal"><img src="img/studio.png" alt="MyDevAgent Studio con la chat di Vio e una modifica con Ctrl+I"><figcaption>Studio: chat, statistiche e modifica con Ctrl+I.</figcaption></figure>
+    <div class="sw reveal" id="sw">
+      <div class="sw-top"><i></i><i></i><i></i><span>config.py · MyDevAgent Studio</span></div>
+      <div class="sw-body">
+        <div class="sw-act"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="sw-ed" id="swEd">
+          <div class="keys" id="swKeys"><kbd>Ctrl</kbd><kbd>I</kbd></div>
+          <div id="swCode"></div>
+        </div>
+        <div class="sw-chat">
+          <svg class="vio" id="swVio" data-expr="chat" aria-hidden="true"></svg>
+          <div class="msg" id="swMsg"></div>
+          <div class="ctx">qwen2.5-coder:7b · locale</div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
+<!-- ====== GALLERIA ====== -->
+<section id="galleria">
+  <div class="wrap">
+    <div class="center reveal">
+      <p class="kicker">Screenshot veri</p>
+      <h2>Com'è davvero, dentro.</h2>
+      <p class="sub">Niente finzioni: queste sono schermate del programma vero.</p>
+    </div>
+    <div class="gtabs reveal" id="gtabs" role="tablist"></div>
+    <div class="gframe reveal" id="gframe"></div>
+    <p class="gcap" id="gcap"></p>
+  </div>
+</section>
+
+<!-- ====== PRIVACY ====== -->
+<section id="privacy">
+  <div class="wrap">
+    <div class="priv">
+      <div class="reveal">
+        <p class="kicker">Privacy</p>
+        <h2>Il tuo codice <span class="grad">resta a casa tua.</span></h2>
+        <p class="sub">Il modello gira sul tuo PC con Ollama. Niente account, niente abbonamento, niente file spediti a un server. Internet serve solo se vuoi la ricerca web.</p>
+      </div>
+      <div class="pc reveal" aria-hidden="true">
+        <span class="pc-label">💻 Il tuo PC</span>
+        <span class="cloud">☁️ <s>server</s> 🔒</span>
+        <div class="wall"></div>
+        <div class="orbit" id="orbit"></div>
+        <svg class="vio" data-expr="done"></svg>
+      </div>
+    </div>
+    <div class="reveal">
+      <h3 style="margin-top:60px;font-size:22px;letter-spacing:-.02em">Che PC serve?</h3>
+      <p class="sub" style="margin-top:6px">MyDevAgent guarda il tuo hardware al primo avvio e sceglie il modello giusto da solo.</p>
+    </div>
+    <div class="hw" style="margin-top:22px">
+      <div class="hwc reveal"><div class="chips"><i class="on"></i><i></i><i></i><i></i></div><b>Solo CPU</b><span>qwen2.5-coder:3b</span><p>Va anche su un portatile senza scheda video.</p></div>
+      <div class="hwc reveal"><div class="chips"><i class="on"></i><i class="on"></i><i></i><i></i></div><b>GPU da 8 GB</b><span>qwen2.5-coder:7b</span><p>Il punto giusto per la maggior parte dei PC da gioco.</p></div>
+      <div class="hwc reveal"><div class="chips"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div><b>GPU da 16 GB</b><span>qwen2.5-coder:14b</span><p>Più contesto e strumenti nativi.</p></div>
+      <div class="hwc reveal"><div class="chips"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div><b>GPU da 24 GB</b><span>qwen3-coder:30b</span><p>Qualità alta e molto veloce.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== INSTALLA ====== -->
 <section id="installa">
   <div class="wrap">
     <div class="center reveal">
       <p class="kicker">Installazione</p>
       <h2>Pronto in tre passi.</h2>
+      <p class="sub">Oppure scarica lo Studio: fa tutto il setup da solo.</p>
     </div>
     <div class="steps">
-      <div class="step reveal"><h3>Installa Ollama</h3><p>Scaricalo da <a href="https://ollama.com" target="_blank" rel="noopener" style="color:var(--lilac)">ollama.com</a>. È il motore che fa girare i modelli sul tuo PC.</p></div>
-      <div class="step reveal"><h3>Scarica ed estrai lo zip</h3><p>Premi <b>Scarica MyDevAgent</b> qui sopra ed estrai la cartella dove vuoi.</p></div>
-      <div class="step reveal"><h3>Avvia</h3><p>Su Windows apri <code>run.bat</code>, su Linux e macOS <code>./run.sh</code>. Al primo avvio controlla tutto da solo.</p></div>
+      <div class="step reveal"><h3>Installa Ollama</h3><p>Scaricalo da <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a>. È il motore che fa girare i modelli sul tuo PC.</p></div>
+      <div class="step reveal"><h3>Scarica ed estrai lo zip</h3><p>Premi <b>Scarica MyDevAgent</b> in cima alla pagina ed estrai la cartella dove vuoi.</p></div>
+      <div class="step reveal"><h3>Avvia</h3><p>Su Windows apri <code>run.bat</code>, su Linux e macOS lancia lo script qui sotto. Al primo avvio controlla tutto da solo.</p>
+        <button class="copy" data-copy="./run.sh">./run.sh <span>⧉</span></button></div>
     </div>
   </div>
 </section>
 
+<!-- ====== FAQ ====== -->
+<section id="faq">
+  <div class="wrap">
+    <div class="center reveal">
+      <p class="kicker">Domande</p>
+      <h2>Domande frequenti</h2>
+    </div>
+    <div class="faq reveal">
+      <details><summary>È davvero gratis?</summary><p>Sì. MyDevAgent è open source e i modelli girano sul tuo PC, quindi non paghi nessun abbonamento e nessun token.</p></details>
+      <details><summary>Serve internet?</summary><p>Solo per scaricare Ollama e i modelli la prima volta. Dopo funziona offline. Se sei online può anche cercare documentazione sul web.</p></details>
+      <details><summary>Che differenza c'è tra lo zip e lo Studio?</summary><p>Lo zip ti dà MyDevAgent nel terminale, per Windows, Linux e macOS. Lo Studio è un editor completo per Windows con Vio nella barra laterale, e installa da solo Python, Ollama e MyDevAgent.</p></details>
+      <details><summary>Può rovinare i miei file?</summary><p>Nella modalità <code>ask</code> ti chiede conferma prima di ogni modifica e ti mostra il diff. Se qualcosa non ti piace, <code>/undo</code> torna indietro. Con <code>plan</code> legge e basta.</p></details>
+      <details><summary>Funziona con i plugin di Claude Code?</summary><p>Sì: plugin, skill, hook, sotto-agenti e server MCP nello stesso formato di Claude Code. Li installi con <code>/plugin install</code>.</p></details>
+      <details><summary>Cos'è MyCode?</summary><p>È il nostro modello AI per il codice, addestrato apposta per MyDevAgent e pensato per una GPU da 8 GB. È ancora in addestramento.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ====== MYCODE ====== -->
 <section id="mycode">
   <div class="wrap">
     <div class="mycode reveal">
@@ -369,6 +804,7 @@
       <h2>MyCode, <span class="grad">il nostro modello AI.</span></h2>
       <p class="sub" style="margin:0 auto">Un modello per il codice addestrato apposta per MyDevAgent, che gira su una GPU da 8 GB. Lo potrai usare da solo in Ollama o come cervello di MyDevAgent.</p>
       <div class="progress"><i></i></div>
+      <p class="brain" id="brain">step 1200 · loss 0.84</p>
       <p class="note">In addestramento… torna presto per scaricarlo.</p>
     </div>
   </div>
@@ -376,136 +812,579 @@
 
 <footer>
   <div class="wrap">
-    <span class="logo"><svg class="vio" data-eyes="happy" data-mouth="smile"></svg><span>My<b>Dev</b>Agent</span></span>
-    <span>Fatto con 💜 e otto tentacoli · <a href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent" target="_blank" rel="noopener" style="color:var(--lilac)">codice su GitHub</a></span>
+    <span class="logo"><svg class="vio" data-expr="love"></svg><span>My<b>Dev</b>Agent</span></span>
+    <span>Fatto con 💜 e otto tentacoli · <a href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent" target="_blank" rel="noopener">codice su GitHub</a> · scrivi <kbd>v</kbd><kbd>i</kbd><kbd>o</kbd> per una sorpresa</span>
   </div>
 </footer>
 
-<div class="toast" id="toast"></div>
+<div class="guide" id="guide">
+  <div class="gb" id="guideSay"></div>
+  <svg class="vio" id="guideVio" data-expr="chat" role="button" aria-label="Torna in cima"></svg>
+</div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
-// Vio: la stessa pixel art 14×8 del terminale (mydevagent/tui/mascot.py)
-const COLORS = { P: "#a855f7", D: "#581c87", L: "#d8b4fe", K: "#1a0b2e", W: "#ffffff", C: "#f472b6", Y: "#facc15", B: "#67e8f9" };
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+
+/* ================= Vio: la stessa pixel art 14×8 del terminale (mydevagent/tui/mascot.py) ================= */
+const COLORS = { P: "#a855f7", D: "#581c87", L: "#d8b4fe", K: "#1a0b2e", W: "#ffffff", C: "#f472b6", Y: "#facc15", B: "#67e8f9", R: "#f43f5e" };
 const HEAD = [".....DDDD.....", "...DDPPPPDD...", "..DPLPPPPPPD.."];
 const EYES = {
   open: [".DPPWKPPWKPPD.", ".DPPKKPPKKPPD."],
   happy: [".DPPKPPPPKPPD.", ".DPKPKPPKPKPD."],
   closed: [".DPPPPPPPPPPD.", ".DPKKKPPKKKPD."],
-  stars: [".DPPYWPPYWPPD.", ".DPPYYPPYYPPD."],
-  hearts: [".DPCPCPPCPCPD.", ".DPPCPPPPCPPD."],
+  look: [".DPPPWKPPWKPD.", ".DPPPKKPPKKPD."],
+  lookL: [".DPWKPPWKPPPD.", ".DPKKPPKKPPPD."],
   glasses: [".DPBBBPPBBBPD.", ".DPBWKBBWKBPD."],
+  stars: [".DPPYWPPYWPPD.", ".DPPYYPPYYPPD."],
+  cross: [".DPRPRPPRPRPD.", ".DPPRPPPPRPPD."],
+  hearts: [".DPCPCPPCPCPD.", ".DPPCPPPPCPPD."],
 };
-const MOUTHS = { smile: ".DPCPPKKPPCPD.", open: ".DPCPKKKKPCPD." };
+const MOUTHS = { smile: ".DPCPPKKPPCPD.", open: ".DPCPKKKKPCPD.", flat: ".DPCPPDDPPCPD." };
 const TENTACLES = [["DPDPDPPPPDPDPD", "D.P.P.DD.P.P.D"], ["DPDPDPPPPDPDPD", ".D.P.PDDP.P.D."]];
+const EXPR = {
+  ask: ["open", "smile"], "auto-edit": ["happy", "open"], plan: ["glasses", "flat"], auto: ["stars", "open"], chat: ["look", "smile"],
+  fast: ["happy", "smile"], balanced: ["open", "smile"], deep: ["glasses", "smile"], "ultra-deep": ["stars", "smile"],
+  think: ["look", "flat"], blink: ["closed", "smile"], done: ["happy", "smile"], error: ["cross", "flat"], love: ["hearts", "smile"],
+  lookL: ["lookL", "smile"], lookR: ["look", "smile"], wow: ["stars", "open"],
+};
 let pose = 0;
-
-function drawVio(svg) {
-  const rows = [...HEAD, ...EYES[svg.dataset.eyes], MOUTHS[svg.dataset.mouth], ...TENTACLES[pose]];
+function drawVio(svg, intro = false) {
+  const [eyes, mouth] = EXPR[svg.dataset.expr] || EXPR.ask;
+  const rows = [...HEAD, ...EYES[eyes], MOUTHS[mouth], ...TENTACLES[pose]];
   let out = "";
   rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch !== ".") out += `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${COLORS[ch]}"/>`;
+    if (ch === ".") return;
+    const st = intro ? ` style="--dx:${(Math.random() * 60 - 30).toFixed(1)}px;--dy:${(Math.random() * 40 - 30).toFixed(1)}px;--d:${(Math.random() * 500).toFixed(0)}ms"` : "";
+    out += `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${COLORS[ch]}"${st}/>`;
   }));
   svg.setAttribute("viewBox", "0 0 14 8");
   svg.setAttribute("shape-rendering", "crispEdges");
   svg.innerHTML = out;
 }
-const vios = [...document.querySelectorAll("svg.vio")];
-const drawAll = () => vios.forEach(drawVio);
-drawAll();
-setInterval(() => { pose ^= 1; drawAll(); }, 600); // tentacoli che ondeggiano
+function face(svg, expr) { if (svg.dataset.expr !== expr) { svg.dataset.expr = expr; if (!svg.dataset.busy) drawVio(svg); } }
+const allVios = () => $$("svg.vio");
+allVios().forEach(s => drawVio(s));
+setInterval(() => { pose ^= 1; allVios().forEach(s => { if (!s.dataset.busy) drawVio(s); }); }, 600); // tentacoli che ondeggiano
 
-const hero = document.getElementById("vioHero");
-const bubble = document.getElementById("bubble");
-function setFace(eyes, mouth) { hero.dataset.eyes = eyes; hero.dataset.mouth = mouth; drawVio(hero); }
+function typeInto(el, text, ms = 26) {
+  clearInterval(el._t); let i = 0; el.textContent = "";
+  if (RM) { el.textContent = text; return; }
+  el._t = setInterval(() => { el.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(el._t); }, ms);
+}
+const toast = $("#toast");
+function showToast(msg) { toast.textContent = msg; toast.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => toast.classList.remove("show"), 2600); }
+
+/* ================= hero ================= */
+const hero = $("#vioHero"), bubble = $("#bubble");
+if (!RM) { // Vio si "monta" pixel per pixel
+  hero.dataset.busy = 1; hero.classList.add("px-in"); drawVio(hero, true);
+  setTimeout(() => { hero.classList.remove("px-in"); delete hero.dataset.busy; drawVio(hero); }, 1500);
+}
+let heroLock = 0; // quando Vio fa una faccia speciale non segue il mouse
+function heroFace(expr, ms) { heroLock = Date.now() + (ms || 0); face(hero, expr); if (ms) setTimeout(() => { if (Date.now() >= heroLock) face(hero, "ask"); }, ms); }
 setInterval(() => { // sbatte le palpebre
-  if (hero.dataset.eyes !== "open") return;
-  setFace("closed", hero.dataset.mouth); setTimeout(() => setFace("open", "smile"), 160);
+  if (Date.now() < heroLock || hero.dataset.busy) return;
+  const prev = hero.dataset.expr; face(hero, "blink"); setTimeout(() => face(hero, prev), 150);
 }, 3400);
-
+addEventListener("pointermove", e => { // gli occhi seguono il mouse
+  if (Date.now() < heroLock || hero.dataset.expr === "blink") return;
+  const r = hero.getBoundingClientRect(); if (r.bottom < 0) return;
+  const dx = e.clientX - (r.left + r.width / 2);
+  face(hero, dx < -120 ? "lookL" : dx > 120 ? "lookR" : "ask");
+}, { passive: true });
 const SAYS = [
-  ["Ciao! Sono Vio 👋", "open", "smile"],
-  ["Otto tentacoli pronti a programmare!", "stars", "open"],
-  ["Leggo il tuo codice e ti propongo un piano.", "glasses", "smile"],
-  ["Gira tutto sul tuo PC, anche offline.", "happy", "smile"],
+  ["Ciao! Sono Vio 👋", "ask"],
+  ["Otto tentacoli pronti a programmare!", "wow"],
+  ["Leggo il tuo codice e ti propongo un piano.", "plan"],
+  ["Gira tutto sul tuo PC, anche offline.", "done"],
+  ["Cliccami, dai! 💜", "chat"],
 ];
 let say = 0;
-function typeBubble(text) {
-  let i = 0; bubble.textContent = "";
-  const t = setInterval(() => { bubble.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(t); }, 28);
-}
 setInterval(() => {
-  say = (say + 1) % SAYS.length;
-  const [text, eyes, mouth] = SAYS[say];
-  setFace(eyes, mouth); typeBubble(text);
-  if (eyes !== "open") setTimeout(() => setFace("open", "smile"), 2200);
-}, 4200);
-const PATS = ["Grazie! 💜", "Fusa da polpo in corso… 💜", "Ancora, ancora! 💜"];
-hero.addEventListener("click", () => { setFace("hearts", "smile"); typeBubble(PATS[Math.floor(Math.random() * PATS.length)]); setTimeout(() => setFace("open", "smile"), 1600); });
-
-// terminale che si scrive da solo
-const SCRIPT = [
-  ['<span class="p">›</span> ', 0], ["aggiungi il login al mio sito e scrivi i test", 32], ["\n", 300],
-  ['<span class="d">● balanced · Architetto ▶ agente ▶ test ▶ review</span>\n', 500],
-  ['<span class="c">  ✎ modifica</span> app/auth.py <span class="ok">+48</span>\n', 600],
-  ['<span class="c">  ✎ modifica</span> templates/login.html <span class="ok">+31</span>\n', 500],
-  ['<span class="c">  ✎ nuovo</span> tests/test_auth.py <span class="ok">+62</span>\n', 500],
-  ['<span class="c">  ▶ esegue</span> pytest -q\n', 700],
-  ['<span class="ok">  ✓ 12 test passati</span>\n', 900],
-  ['<span class="c">  ◆ review</span> nessun problema trovato\n\n', 600],
-  ['<span class="v">Vio</span> <span class="d">·</span> Fatto in 41s! Vuoi vedere il diff?\n', 500],
-];
-const term = document.getElementById("term");
-async function runTerm() {
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  while (true) {
-    let html = "";
-    for (const [chunk, speed] of SCRIPT) {
-      if (speed > 0 && speed < 100 && !chunk.includes("<")) {
-        for (const ch of chunk) { html += ch; term.innerHTML = html + '<span class="caret"></span>'; await sleep(speed); }
-      } else { await sleep(speed); html += chunk; term.innerHTML = html + '<span class="caret"></span>'; }
-    }
-    await sleep(5000);
+  if (Date.now() < heroLock) return;
+  say = (say + 1) % SAYS.length; const [text, expr] = SAYS[say];
+  typeInto(bubble, text); heroFace(expr, 2400);
+}, 4600);
+function hearts(box, n = 6) {
+  if (RM) return;
+  for (let i = 0; i < n; i++) {
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("viewBox", "0 0 7 6"); s.setAttribute("shape-rendering", "crispEdges"); s.classList.add("heart");
+    s.innerHTML = '<path fill="#f472b6" d="M1 0h2v1h1V0h2v1h1v2H6v1H5v1H4v1H3V5H2V4H1V3H0V1h1z"/>';
+    s.style.setProperty("--x", (Math.random() * 180 - 90) + "px"); s.style.animationDelay = i * 90 + "ms";
+    box.appendChild(s); setTimeout(() => s.remove(), 1600 + i * 90);
   }
 }
-runTerm();
+const PATS = ["Grazie! 💜", "Fusa da polpo in corso… 💜", "Ancora, ancora! 💜", "Otto tentacoli di abbracci! 💜"];
+hero.addEventListener("click", () => { heroFace("love", 1800); typeInto(bubble, PATS[Math.floor(Math.random() * PATS.length)]); hearts($("#heroHearts")); });
 
-// comparsa allo scroll + barre + contatori
+// riga che si riscrive da sola
+const ROT = ["scrive il codice al posto tuo", "lancia i test e li fa passare", "si corregge da solo", "funziona anche senza internet", "ti spiega cosa fa, se vuoi imparare"];
+(async () => {
+  const el = $("#rot"), sleep = ms => new Promise(r => setTimeout(r, ms));
+  if (RM) { el.textContent = ROT[0]; return; }
+  for (let i = 0; ; i = (i + 1) % ROT.length) {
+    for (const ch of ROT[i]) { el.textContent += ch; await sleep(45); }
+    await sleep(1800);
+    while (el.textContent) { el.textContent = el.textContent.slice(0, -1); await sleep(18); }
+    await sleep(250);
+  }
+})();
+
+// nastro dei comandi
+const CMDS = [["/fast", "risposte al volo"], ["/deep", "team completo"], ["/ultra-deep", "35 agenti"], ["/undo", "torna indietro"], ["/multi", "gioca con gli amici"],
+  ["/impara", "scrivi un pezzo tu"], ["/new", "progetti pronti"], ["/stats", "le tue statistiche"], ["/plugin", "plugin di Claude Code"], ["/vio", "saluta la mascotte"],
+  ["@file", "allega un file"], ["!shell", "lancia un comando"], ["#nota", "memoria"], ["Shift+Tab", "cambia modalità"], ["Esc Esc", "torna indietro"]];
+const trackHtml = CMDS.map(([c, d]) => `<span><b>${c}</b> ${d}</span>`).join("");
+$("#track").innerHTML = trackHtml + trackHtml;
+
+/* ================= player: un orologio che si può mettere in pausa ================= */
+class Player {
+  constructor({ chapters, onChapter, onProgress, stage }) {
+    Object.assign(this, { chapters, onChapter, onProgress, stage });
+    this.t = 0; this.waits = []; this.gen = 0; this.idx = 0; this.start = 0; this.playing = false; this.last = 0;
+    const loop = now => {
+      const dt = Math.min(now - (this.last || now), 100); this.last = now;
+      if (this.playing) {
+        this.t += dt;
+        const due = this.waits.filter(w => w.at <= this.t); this.waits = this.waits.filter(w => w.at > this.t); due.forEach(w => w.res());
+        this.onProgress?.(this.idx, Math.min((this.t - this.start) / this.chapters[this.idx].dur, 1));
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+  wait(ms) { return new Promise(res => this.waits.push({ at: this.t + ms, res })); }
+  async type(el, text, ms = 34) { for (const ch of text) { el.textContent += ch; await this.wait(ms); } }
+  async go(i = 0) {
+    const g = ++this.gen; this.waits = [];
+    for (;;) {
+      this.idx = i; this.start = this.t; const c = this.chapters[i];
+      this.onChapter?.(i);
+      await c.fn(this); if (g !== this.gen) return;
+      const left = this.start + c.dur - this.t; if (left > 0) { await this.wait(left); if (g !== this.gen) return; }
+      i = (i + 1) % this.chapters.length;
+    }
+  }
+  setPlaying(on) { this.playing = on; this.stage?.classList.toggle("paused", !on); }
+}
+
+/* ================= clip: Vio al lavoro ================= */
+const stage = $("#stage"), clipVio = $("#clipVio"), clipSay = $("#clipSay"), clipChip = $("#clipChip");
+const scene = html => { stage.innerHTML = `<div class="scene">${html}</div>`; return stage.firstChild; };
+const vioSays = (expr, text, team) => { face(clipVio, expr); typeInto(clipSay, text); if (team) clipChip.innerHTML = `team <b>${team}</b>`; };
+const SNAKE = [
+  '<span class="k">import</span> random',
+  '',
+  '<span class="k">class</span> <span class="f">Serpente</span>:',
+  '    <span class="k">def</span> <span class="f">__init__</span>(self, x, y):',
+  '        self.corpo = [(x, y)]',
+  '        self.direzione = (<span class="n">1</span>, <span class="n">0</span>)',
+  '',
+  '    <span class="k">def</span> <span class="f">muovi</span>(self, mela):',
+  '        testa = self.<span class="f">prossima_testa</span>()',
+  '        self.corpo.<span class="f">insert</span>(<span class="n">0</span>, testa)',
+  '        <span class="k">if</span> testa == mela:',
+  '            <span class="k">return</span> <span class="k">True</span>  <span class="cm"># cresce!</span>',
+  '        self.corpo.<span class="f">pop</span>()',
+  '        <span class="k">return</span> <span class="k">False</span>',
+];
+function confetti(box, n = 40) {
+  if (RM) return;
+  const cols = ["#a855f7", "#f472b6", "#d8b4fe", "#facc15", "#4ade80", "#67e8f9"];
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement("i"); d.className = "conf";
+    const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 220;
+    d.style.cssText = `background:${cols[i % cols.length]};--x:${Math.cos(a) * r}px;--y:${Math.sin(a) * r * .6 + 60}px;--r:${Math.random() * 720}deg`;
+    box.appendChild(d);
+  }
+}
+const CHAPTERS = [
+  { name: "Chiedi", dur: 4800, fn: async p => {
+    vioSays("ask", "Ciao! Cosa costruiamo oggi?", "auto");
+    const s = scene(`<div class="ask"><div class="ask-hint">Scrivi quello che vuoi, in italiano.</div>
+      <div class="ask-box"><span class="p">›</span><span id="askT"></span><span class="caret"></span></div>
+      <div class="ask-keys"><kbd id="enter">Invio ↵</kbd> per mandare</div></div>`);
+    await p.wait(500); await p.type($("#askT", s), "crea il gioco snake con pygame e scrivi i test", 36);
+    await p.wait(350); $("#enter", s).classList.add("press"); await p.wait(250);
+    $(".ask-box", s).classList.add("sent"); vioSays("chat", "Ricevuto! Un gioco snake coi test. Mi metto al lavoro.");
+  } },
+  { name: "Legge", dur: 5400, fn: async p => {
+    vioSays("plan", "Prima leggo il progetto e preparo un piano.", "auto");
+    const s = scene(`<div class="read"><div class="pane"><h4>Progetto</h4><ul class="tree">
+      <li>📁 snake/</li><li>&nbsp; main.py</li><li>&nbsp; requirements.txt</li><li>&nbsp; README.md</li><li>📁 assets/</li><li>&nbsp; mela.png</li></ul></div>
+      <div class="pane"><h4>Piano</h4><ul class="plan">
+      <li data-n="1"><span><b>snake.py</b> · il serpente, la mela e le collisioni</span></li>
+      <li data-n="2"><span><b>main.py</b> · finestra, tasti e loop di gioco</span></li>
+      <li data-n="3"><span><b>tests/test_snake.py</b> · 7 test</span></li>
+      <li data-n="4"><span>lanciare i test e fare la review</span></li></ul></div></div><div class="scanbar"></div>`);
+    const items = $$(".tree li", s);
+    for (const li of items) { li.classList.add("scan"); await p.wait(260); li.classList.remove("scan"); li.classList.add("ok"); }
+    $(".scanbar", s)?.remove();
+    for (const li of $$(".plan li", s)) { li.classList.add("in"); await p.wait(420); }
+  } },
+  { name: "Team", dur: 5600, fn: async p => {
+    vioSays("think", "Il router sceglie il team: basta quello bilanciato.");
+    const small = stage.clientWidth < 560; // sul telefono il team si dispone in verticale
+    const [W, H, cx, cy] = small ? [360, 430, 180, 215] : [600, 370, 300, 190];
+    const NODES = small
+      ? [["🏛️", "Architetto", 88, 95], ["🐍", "Python", 272, 95], ["🧪", "Test", 88, 330], ["🔍", "Reviewer", 272, 330], ["📦", "Formatter", 180, 400]]
+      : [["🏛️", "Architetto", 115, 90], ["🐍", "Python", 485, 90], ["🧪", "Test", 95, 265], ["🔍", "Reviewer", 505, 265], ["📦", "Formatter", 300, 330]];
+    const svg = `<svg class="net" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+      <text class="router" x="${cx}" y="22">router ▸ <tspan class="m" id="rm"></tspan></text>
+      ${NODES.map(([, , x, y]) => `<line class="ln" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/><line class="fl" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/>`).join("")}
+      <circle class="halo" cx="${cx}" cy="${cy}" r="44"/><circle class="core" cx="${cx}" cy="${cy}" r="44"/>
+      <svg class="vio" id="netVio" data-expr="think" x="${cx - 32}" y="${cy - 18}" width="64" height="37"></svg>
+      ${NODES.map(([ic, name, x, y]) => `<g transform="translate(${x} ${y})"><g class="nd"><rect class="box" x="-72" y="-22" width="144" height="44" rx="12"/>
+        <text class="ic" x="-46" y="1">${ic}</text><text x="12" y="1">${name}</text></g></g>`).join("")}
+    </svg>`;
+    const s = scene(svg);
+    drawVio($("#netVio", s));
+    $$(".ln", s).forEach(l => { const L = Math.hypot(l.x2.baseVal.value - cx, l.y2.baseVal.value - cy); l.style.strokeDasharray = L; l.style.strokeDashoffset = L; });
+    await p.wait(300); await p.type($("#rm", s), "balanced", 60); clipChip.innerHTML = "team <b>balanced</b>";
+    const lns = $$(".ln", s), fls = $$(".fl", s), nds = $$(".nd", s);
+    for (let i = 0; i < nds.length; i++) { lns[i].style.strokeDashoffset = 0; await p.wait(280); nds[i].classList.add("on"); fls[i].classList.add("on"); await p.wait(200); }
+    face(clipVio, "chat"); face($("#netVio", s), "done"); typeInto(clipSay, "Architetto, Python, Test, Reviewer e Formatter: si parte!");
+  } },
+  { name: "Scrive", dur: 6600, fn: async p => {
+    vioSays("auto-edit", "Scrivo il codice. Tu intanto bevi un succo 🧃", "balanced");
+    const s = scene(`<div class="ed"><div class="tabs"><span class="on">snake.py</span><span>main.py</span><span>test_snake.py</span><em id="cnt">+0</em></div>
+      <div class="code">${SNAKE.map((l, i) => `<span class="l add" data-g="${i + 1}">${l || " "}</span>`).join("")}</div></div>`);
+    const lines = $$(".l", s), cnt = $("#cnt", s), tabs = $$(".tabs span", s);
+    for (let i = 0; i < lines.length; i++) { lines[i].classList.add("in"); cnt.textContent = "+" + (i + 1); await p.wait(210); }
+    tabs[0].classList.add("ok"); tabs[0].classList.remove("on"); tabs[1].classList.add("on");
+    for (let n = 15; n <= 78; n += 3) { cnt.textContent = "+" + n; await p.wait(22); }
+    tabs[1].classList.add("ok"); tabs[1].classList.remove("on"); tabs[2].classList.add("on");
+    for (let n = 79; n <= 142; n += 3) { cnt.textContent = "+" + Math.min(n, 142); await p.wait(22); }
+    tabs[2].classList.add("ok"); cnt.textContent = "+142";
+  } },
+  { name: "Test", dur: 7600, fn: async p => {
+    vioSays("think", "Lancio i test per vedere se funziona davvero.");
+    const s = scene(`<div class="tt" id="tt"></div>`), tt = $("#tt", s);
+    const add = html => { const d = document.createElement("div"); d.innerHTML = html; tt.appendChild(d); return d; };
+    add('<span class="p">$</span> pytest -q'); await p.wait(400);
+    const dots = add('<span class="dots"></span>').firstChild;
+    for (const ok of [1, 1, 0, 1, 1, 1, 1]) { dots.innerHTML += `<i class="${ok ? "" : "x"}">${ok ? "." : "F"}</i>`; await p.wait(160); }
+    add('<span class="err">FAILED</span> test_mangia_mela <span class="d">· il serpente non cresce</span>');
+    tt.classList.add("shake"); vioSays("error", "Ops! Un test non passa. Guardo l'errore…"); await p.wait(1300);
+    add('<span class="d">  mela arriva come lista [5, 3], testa è una tupla (5, 3)</span>'); await p.wait(700);
+    vioSays("auto-edit", "Trovato! Correggo snake.py da sola.");
+    add('<span class="c">✎ snake.py</span>'); add('<span class="err">-        if testa == mela:</span>'); await p.wait(250);
+    add('<span class="ok">+        if testa == tuple(mela):</span>'); await p.wait(700);
+    add('<span class="p">$</span> pytest -q'); await p.wait(300);
+    const d2 = add('<span class="dots"></span>').firstChild;
+    for (let i = 0; i < 7; i++) { d2.innerHTML += "<i>.</i>"; await p.wait(110); }
+    add('<span class="ok">✓ 7 test passati</span> <span class="d">in 0.21s</span>');
+    vioSays("wow", "Ora passano tutti e 7! ✨");
+  } },
+  { name: "Fatto", dur: 5600, fn: async p => {
+    vioSays("done", "Fatto! Vuoi vedere il diff prima di salvare?");
+    const s = scene(`<div class="fin"><h3>Fatto in <span class="grad">36 secondi</span></h3>
+      <div class="kpis"><div class="kpi"><b>3</b><span>file creati</span></div><div class="kpi"><b>+142</b><span>righe</span></div>
+      <div class="kpi"><b>7 ✓</b><span>test passati</span></div><div class="kpi"><b>1</b><span>errore corretto da solo</span></div></div>
+      <div class="fake-btns"><span>Mostra il diff</span><span>/undo</span><span>python main.py ▶</span></div></div>`);
+    for (const k of $$(".kpi", s)) { k.classList.add("in"); await p.wait(160); }
+    confetti(s); await p.wait(1600); face(clipVio, "love"); typeInto(clipSay, "Ti piace? Adesso tocca a te giocare! 🐍💜");
+  } },
+];
+const chapsEl = $("#chaps");
+chapsEl.innerHTML = CHAPTERS.map((c, i) => `<button class="chap" data-i="${i}"><span class="bar"><i></i></span>${i + 1}. ${c.name}</button>`).join("");
+const chapBtns = $$(".chap", chapsEl), bars = chapBtns.map(b => $("i", b));
+const PLAY = '<svg viewBox="0 0 10 10"><path d="M2 1l7 4-7 4z"/></svg>', PAUSE = '<svg viewBox="0 0 10 10"><path d="M2 1h2v8H2zM6 1h2v8H6z"/></svg>';
+const clip = new Player({
+  stage, chapters: CHAPTERS,
+  onChapter: i => chapBtns.forEach((b, j) => { b.classList.toggle("on", i === j); bars[j].style.transform = `scaleX(${j < i ? 1 : 0})`; }),
+  onProgress: (i, p) => { bars[i].style.transform = `scaleX(${p})`; },
+});
+const playBtn = $("#playBtn");
+let userPaused = RM, clipStarted = false, clipVisible = false;
+function syncPlay() {
+  const on = clipVisible && !userPaused && !document.hidden;
+  if (on && !clipStarted) { clipStarted = true; clip.go(0); }
+  clip.setPlaying(on);
+  playBtn.innerHTML = userPaused ? PLAY : PAUSE; playBtn.setAttribute("aria-label", userPaused ? "Riproduci" : "Pausa");
+}
+playBtn.addEventListener("click", () => { userPaused = !userPaused; syncPlay(); });
+chapBtns.forEach(b => b.addEventListener("click", () => { clipStarted = true; userPaused = false; clip.go(+b.dataset.i); syncPlay(); }));
+new IntersectionObserver(([e]) => { clipVisible = e.isIntersecting; syncPlay(); }, { threshold: .35 }).observe($("#player"));
+document.addEventListener("visibilitychange", () => { syncPlay(); studioPlayer.setPlaying(swVisible && !document.hidden); });
+if (RM) { clip.idx = 5; CHAPTERS[5].fn({ wait: () => new Promise(() => {}), type: async () => {} }); } // senza animazioni: mostra il risultato
+
+/* ================= facce di Vio ================= */
+const FACES = [
+  ["ask", "Ti chiedo conferma prima di ogni modifica.", "modalità"], ["auto-edit", "Modifico i file da sola, per i comandi ti chiedo.", "modalità"],
+  ["plan", "Leggo e ti propongo un piano, senza toccare niente.", "modalità"], ["auto", "Faccio tutto da sola, dentro questa cartella.", "modalità"],
+  ["chat", "Rispondo e basta: i file li salvi tu con /apply.", "modalità"], ["think", "Hmm… ci sto pensando.", "mentre lavora"],
+  ["done", "Fatto! Tutti i test passano.", "a fine lavoro"], ["error", "Ops, un errore. Lo sistemo subito!", "sugli errori"], ["love", "Grazie per le coccole! 💜", "con /vio"],
+];
+const faceVio = $("#faceVio"), faceSay = $("#faceSay"), faceName = $("#faceName"), faceList = $("#faceList");
+faceList.innerHTML = FACES.map(([n, , k], i) => `<button class="face" data-i="${i}"><svg class="vio" data-expr="${n}"></svg>${n}<small>${k}</small></button>`).join("");
+$$("svg.vio", faceList).forEach(s => drawVio(s));
+const faceBtns = $$(".face", faceList);
+let faceIdx = 0, faceAuto = true;
+function pickFace(i) {
+  faceIdx = i; const [n, t, k] = FACES[i];
+  faceBtns.forEach((b, j) => b.classList.toggle("on", i === j));
+  face(faceVio, n); typeInto(faceSay, t); faceName.textContent = n; faceName.previousSibling.textContent = k === "modalità" ? "modalità " : k + " · ";
+  if (i < 5) { const k2 = $("#stKey"); k2.classList.remove("kbd-flash"); void k2.offsetWidth; k2.classList.add("kbd-flash"); }
+}
+faceBtns.forEach(b => b.addEventListener("click", () => { faceAuto = false; pickFace(+b.dataset.i); if (FACES[+b.dataset.i][0] === "love") hearts($(".face-big")); }));
+pickFace(0);
+let faceVisible = false;
+new IntersectionObserver(([e]) => { faceVisible = e.isIntersecting; }, { threshold: .3 }).observe($(".faces"));
+setInterval(() => { if (faceAuto && faceVisible && !RM) pickFace((faceIdx + 1) % 5); }, 2800); // come premere Shift+Tab
+
+/* ================= team: la costellazione dei 35 agenti ================= */
+const AGENTS = ["Architetto del Codice", "Algoritmi & Strutture Dati", "Linguaggi & Framework", "Debugging & Testing", "Frontend", "Backend & API", "Database & ORM",
+  "DevOps & CI/CD", "Security & Best Practices", "Performance & Optimization", "Research Agent", "Code Reviewer & Refactor", "Documentation & Commenti",
+  "Edge Case & Robustness", "Output Formatter & Final Delivery", "Analista dei requisiti", "API Designer", "Mobile", "Cloud Architect", "Data Engineer",
+  "AI/ML Engineer", "Concorrenza & Async", "Sistemi & Low-level", "Accessibilità & i18n", "UX/UI Designer", "Osservabilità", "Dipendenze & Supply chain",
+  "Migrazioni & Legacy", "Test Strategist", "Threat Modeling & Privacy", "Scalabilità & Carico", "Release & Versioning", "Fact-checker web",
+  "Avvocato del diavolo", "Integratore capo"];
+const MODES = [
+  ["fast", [3], "Un solo specialista con le regole del Formatter. Risposte in pochi secondi.", 95, 20, "fast"],
+  ["balanced", [1, 3, 4, 12, 15], "Architetto, specialista, test e review sul diff reale. Il team standard.", 70, 45, "balanced"],
+  ["deep", [1, 3, 4, 9, 10, 12, 13, 14, 15], "In più sicurezza, performance, casi limite e documentazione, con due giri di review.", 45, 72, "deep"],
+  ["ultra-deep", AGENTS.map((_, i) => i + 1), "Tutti i 35 agenti. Lento, ma per i lavori importanti: fino a tre giri di review.", 15, 100, "ultra-deep"],
+];
+const cs = $("#constelSvg");
+let csHtml = `<circle class="ring" r="105"/><circle class="ring" r="178"/>`;
+const pos = AGENTS.map((_, i) => {
+  const inner = i < 15, n = inner ? 15 : 20, k = inner ? i : i - 15, R = inner ? 105 : 178;
+  const a = (k / n) * Math.PI * 2 - Math.PI / 2 + (inner ? 0 : Math.PI / 20);
+  return [Math.cos(a) * R, Math.sin(a) * R];
+});
+pos.forEach(([x, y]) => { csHtml += `<line class="spoke" x1="0" y1="0" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; });
+pos.forEach(([x, y], i) => { csHtml += `<circle class="dot${i >= 15 ? " ultra" : ""}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${i < 15 ? 10 : 8}" data-i="${i}"/>`; });
+csHtml += `<circle r="46" fill="#1a1029" stroke="#a855f7" stroke-width="2"/><svg class="vio" id="teamVio" data-expr="fast" x="-36" y="-21" width="72" height="41"></svg>`;
+cs.innerHTML = csHtml; drawVio($("#teamVio"));
+const spokes = $$(".spoke", cs), dots = $$(".dot", cs), tip = $("#tip"), constel = $("#constel");
+dots.forEach(d => {
+  d.addEventListener("pointerenter", () => {
+    const i = +d.dataset.i, r = d.getBoundingClientRect(), c = constel.getBoundingClientRect();
+    tip.textContent = `${i + 1}. ${AGENTS[i]}`; tip.style.left = r.left - c.left + r.width / 2 + "px"; tip.style.top = r.top - c.top + "px"; tip.classList.add("show");
+  });
+  d.addEventListener("pointerleave", () => tip.classList.remove("show"));
+});
+$("#modeBtns").innerHTML = MODES.map(([n], i) => `<button class="mode-btn" data-i="${i}">/${n}</button>`).join("");
+const modeBtns = $$(".mode-btn");
+let modeIdx = 0, modeAuto = true, teamVisible = false;
+function pickMode(i) {
+  modeIdx = i; const [, ids, desc, speed, depth, expr] = MODES[i], on = new Set(ids.map(x => x - 1));
+  modeBtns.forEach((b, j) => b.classList.toggle("on", i === j));
+  dots.forEach((d, j) => { setTimeout(() => d.classList.toggle("on", on.has(j)), RM ? 0 : j * 18); });
+  spokes.forEach((s, j) => s.classList.toggle("on", on.has(j)));
+  const cnt = $("#modeCount"), from = +cnt.textContent, t0 = performance.now();
+  const tick = now => { const p = Math.min((now - t0) / 600, 1); cnt.textContent = Math.round(from + (ids.length - from) * p); if (p < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+  $("#modeWord").textContent = ids.length === 1 ? "agente" : "agenti";
+  $("#modeDesc").textContent = desc; $("#mSpeed").style.width = speed + "%"; $("#mDepth").style.width = depth + "%";
+  face($("#teamVio"), expr);
+}
+modeBtns.forEach(b => b.addEventListener("click", () => { modeAuto = false; pickMode(+b.dataset.i); }));
+pickMode(0);
+new IntersectionObserver(([e]) => { teamVisible = e.isIntersecting; }, { threshold: .3 }).observe($(".team"));
+setInterval(() => { if (modeAuto && teamVisible && !RM) pickMode((modeIdx + 1) % MODES.length); }, 3200);
+
+/* ================= studio: Ctrl+I ================= */
+const OLD = [
+  '<span class="k">import</span> json', '',
+  '<span class="k">def</span> <span class="f">leggi_config</span>(percorso):',
+  '    <span class="k">with</span> <span class="f">open</span>(percorso) <span class="k">as</span> f:',
+  '        <span class="k">return</span> json.<span class="f">load</span>(f)', '',
+  'config = <span class="f">leggi_config</span>(<span class="s">"impostazioni.json"</span>)',
+];
+const NEW = [
+  '    <span class="k">try</span>:',
+  '        <span class="k">with</span> <span class="f">open</span>(percorso) <span class="k">as</span> f:',
+  '            <span class="k">return</span> json.<span class="f">load</span>(f)',
+  '    <span class="k">except</span> <span class="f">FileNotFoundError</span>:',
+  '        <span class="k">return</span> {}  <span class="cm"># niente file: impostazioni vuote</span>',
+];
+const swCode = $("#swCode"), swKeys = $("#swKeys"), swVio = $("#swVio"), swMsg = $("#swMsg");
+const L = (html, g, cls = "") => `<span class="l ${cls}" data-g="${g}">${html || " "}</span>`;
+function swRender(state, ask = "") {
+  let h = "";
+  if (state === "done") {
+    h = [OLD[0], OLD[1], OLD[2], ...NEW, OLD[5], OLD[6]].map((l, i) => L(l, i + 1)).join("");
+  } else {
+    OLD.forEach((l, i) => {
+      const inSel = i >= 2 && i <= 4;
+      if (state === "diff" && (i === 3 || i === 4)) { h += L(l, "", "del"); if (i === 4) NEW.forEach(n => { h += L(n, "", "add"); }); return; }
+      h += L(l, i + 1, state === "sel" || state === "ask" ? (inSel ? "sel" : "") : "");
+      if (i === 4 && state === "ask") h += `<div class="inl"><span class="p">✦</span> <span id="swAsk">${ask}</span><span class="caret"></span></div>`;
+    });
+    if (state === "diff") h += `<div class="inl"><span class="p">✦</span> gestisci il file mancante<div class="acts"><span class="ok" id="swOk">Accetta ⇥</span><span>Scarta</span></div></div>`;
+  }
+  swCode.innerHTML = h;
+}
+const studioPlayer = new Player({ stage: $("#sw"), chapters: [{ name: "ctrl-i", dur: 12500, fn: async p => {
+  swRender("plain"); face(swVio, "chat"); typeInto(swMsg, "Seleziona del codice e premi Ctrl+I: lo cambio io.");
+  await p.wait(1400); swRender("sel"); await p.wait(700);
+  swKeys.classList.add("on"); await p.wait(700); swKeys.classList.remove("on");
+  swRender("ask"); face(swVio, "ask"); await p.type($("#swAsk"), "gestisci il file mancante", 45);
+  await p.wait(400); face(swVio, "think"); typeInto(swMsg, "Ci penso…"); await p.wait(1200);
+  swRender("diff"); face(swVio, "auto-edit"); typeInto(swMsg, "Ecco: se il file non c'è, restituisco un dizionario vuoto.");
+  await p.wait(2000); $("#swOk").classList.add("press"); await p.wait(400);
+  swRender("done"); face(swVio, "done"); typeInto(swMsg, "Modifica applicata! ✓");
+} }] });
+let swVisible = false;
+swRender("plain"); typeInto(swMsg, "Seleziona del codice e premi Ctrl+I: lo cambio io.");
+new IntersectionObserver(([e]) => {
+  swVisible = e.isIntersecting;
+  if (swVisible && !RM && !studioPlayer.gen) studioPlayer.go(0);
+  studioPlayer.setPlaying(swVisible && !RM && !document.hidden);
+}, { threshold: .35 }).observe($("#sw"));
+
+/* ================= galleria ================= */
+const SHOTS = [
+  ["Terminale", "img/lavoro.png", "Il terminale: Vio cambia faccia con la modalità e ti dice cosa fa il team."],
+  ["Multigiocatore", "img/multi.png", "/multi: un amico si collega dal browser e chiede modifiche, tu confermi."],
+  ["Studio", "img/studio.png", "MyDevAgent Studio: chat con Vio, statistiche e modifica con Ctrl+I."],
+  ["/new e /impara", "img/impara.png", "/new crea un progetto pronto, /impara ti lascia scrivere un pezzo da solo."],
+  ["Plugin", "img/plugin.png", "/plugin: i plugin di Claude Code funzionano anche qui."],
+  ["Sotto-agenti", "img/agenti.png", "I sotto-agenti, ognuno con il suo contesto separato."],
+];
+const gtabs = $("#gtabs"), gframe = $("#gframe"), gcap = $("#gcap");
+gtabs.innerHTML = SHOTS.map(([n], i) => `<button class="gtab" role="tab" data-i="${i}">${n}</button>`).join("");
+gframe.innerHTML = SHOTS.map(([n, src, cap], i) => `<img src="${src}" alt="${cap}" loading="lazy" data-i="${i}">`).join("");
+const gBtns = $$(".gtab"), gImgs = $$("img", gframe);
+let gIdx = 0, gAuto = !RM, gVisible = false, gTimer;
+function pickShot(i) {
+  gIdx = i; gBtns.forEach((b, j) => { b.classList.toggle("on", i === j); b.classList.toggle("hold", !gAuto); b.setAttribute("aria-selected", i === j); });
+  gImgs.forEach((im, j) => im.classList.toggle("on", i === j)); gcap.textContent = SHOTS[i][2];
+  // riavvia l'animazione della barretta
+  const b = gBtns[i]; b.classList.remove("on"); void b.offsetWidth; b.classList.add("on");
+  clearTimeout(gTimer); if (gAuto) gTimer = setTimeout(() => { if (gVisible) pickShot((gIdx + 1) % SHOTS.length); else gWait = true; }, 6000);
+}
+let gWait = false;
+gBtns.forEach(b => b.addEventListener("click", () => { gAuto = false; pickShot(+b.dataset.i); }));
+new IntersectionObserver(([e]) => { gVisible = e.isIntersecting; if (gVisible && gWait) { gWait = false; pickShot((gIdx + 1) % SHOTS.length); } }, { threshold: .3 }).observe(gframe);
+pickShot(0);
+
+/* ================= privacy: file che girano attorno a Vio ================= */
+const FILES = ["main.py", "index.html", "app.js", "README.md", ".env", "test_app.py"];
+$("#orbit").innerHTML = FILES.map((f, i) => `<span style="--a:${i * 60}deg;--r:${i % 2 ? 150 : 118}px"><b>📄 ${f}</b></span>`).join("");
+
+/* ================= MyCode: numeri dell'addestramento ================= */
+(() => {
+  const el = $("#brain"); let step = 1200, loss = .84;
+  if (!RM) setInterval(() => { step += 7 + Math.floor(Math.random() * 6); loss = Math.max(.31, loss - Math.random() * .004); el.textContent = `step ${step} · loss ${loss.toFixed(2)} · GPU 8 GB`; }, 700);
+})();
+
+/* ================= comparsa allo scroll + contatori ================= */
 const io = new IntersectionObserver(entries => entries.forEach(e => {
   if (!e.isIntersecting) return;
   e.target.classList.add("in");
-  const n = e.target.querySelector("[data-count]");
+  const n = e.target.matches("[data-count]") ? e.target : e.target.querySelector("[data-count]");
   if (n) countUp(n);
   io.unobserve(e.target);
-}), { threshold: .15 });
-document.querySelectorAll(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 3) * 90 + "ms"; io.observe(el); });
+}), { threshold: .12 });
+$$(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 3) * 90 + "ms"; io.observe(el); });
 function countUp(el) {
   const end = +el.dataset.count, pre = el.dataset.prefix || "", suf = el.dataset.suffix || "", t0 = performance.now();
   const tick = now => {
-    const p = Math.min((now - t0) / 1400, 1);
+    const p = RM ? 1 : Math.min((now - t0) / 1400, 1);
     el.textContent = pre + Math.round(end * (1 - Math.pow(1 - p, 3))) + suf;
     if (p < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }
 
-// luce che segue il mouse sulle card
-document.querySelectorAll(".card").forEach(c => c.addEventListener("pointermove", e => {
-  const r = c.getBoundingClientRect();
-  c.style.setProperty("--mx", e.clientX - r.left + "px"); c.style.setProperty("--my", e.clientY - r.top + "px");
+// card che si inclinano verso il mouse
+$$(".card").forEach(c => {
+  c.addEventListener("pointermove", e => {
+    const r = c.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    c.style.setProperty("--mx", x + "px"); c.style.setProperty("--my", y + "px");
+    if (!RM) c.style.transform = `perspective(700px) rotateX(${(.5 - y / r.height) * 8}deg) rotateY(${(x / r.width - .5) * 8}deg) translateY(-4px)`;
+  });
+  c.addEventListener("pointerleave", () => { c.style.transform = ""; });
+});
+
+/* ================= barra in alto, progresso, sezione attiva ================= */
+const nav = $("#nav"), prog = $("#prog"), guide = $("#guide"), guideSay = $("#guideSay"), guideVio = $("#guideVio");
+const navLinks = $$("nav ul a");
+function onScroll() {
+  nav.classList.toggle("scrolled", scrollY > 10);
+  const max = document.documentElement.scrollHeight - innerHeight;
+  prog.style.transform = `scaleX(${max > 0 ? scrollY / max : 0})`;
+  guide.classList.toggle("show", scrollY > innerHeight * .8);
+}
+addEventListener("scroll", onScroll, { passive: true }); onScroll();
+const GUIDE = {
+  clip: ["Guarda! Qui sono io al lavoro 🐙", "chat"], vio: ["Quale faccia ti piace di più?", "love"], team: ["Il mio team: 35 agenti!", "ultra-deep"],
+  funzioni: ["Ecco tutto quello che so fare.", "done"], studio: ["Qui vivo dentro un editor!", "auto-edit"], galleria: ["Screenshot veri, niente trucchi.", "ask"],
+  privacy: ["I tuoi file restano con noi due.", "done"], installa: ["Tre passi e ci conosciamo 😊", "wow"], faq: ["Chiedi pure!", "think"], mycode: ["Il mio nuovo cervello, presto!", "plan"],
+};
+const secObs = new IntersectionObserver(entries => entries.forEach(e => {
+  if (!e.isIntersecting) return;
+  const id = e.target.id, g = GUIDE[id];
+  navLinks.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + id));
+  if (!g) return;
+  guideSay.classList.add("hide");
+  setTimeout(() => { guideSay.textContent = g[0]; guideSay.classList.remove("hide"); face(guideVio, g[1]); }, 250);
+  clearTimeout(guideSay._t); guideSay._t = setTimeout(() => guideSay.classList.add("hide"), 4500);
+}), { rootMargin: "-45% 0px -45% 0px" });
+$$("section[id]").forEach(s => secObs.observe(s));
+guideVio.addEventListener("click", () => scrollTo({ top: 0, behavior: RM ? "auto" : "smooth" }));
+
+// copia il comando
+$$(".copy").forEach(b => b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); showToast("📋 Copiato: " + b.dataset.copy); } catch { showToast("Scrivi: " + b.dataset.copy); }
 }));
 
-// barra in alto
-const nav = document.getElementById("nav");
-addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 10), { passive: true });
-
 // MyCode non è ancora pronto
-const toast = document.getElementById("toast");
-document.getElementById("mycodeBtn").addEventListener("click", e => {
-  e.preventDefault();
-  toast.textContent = "🧠 MyCode è ancora in addestramento: arriva presto!";
-  toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 2600);
-  document.getElementById("mycode").scrollIntoView({ behavior: "smooth" });
+$("#mycodeBtn").addEventListener("click", e => {
+  e.preventDefault(); showToast("🧠 MyCode è ancora in addestramento: arriva presto!");
+  $("#mycode").scrollIntoView({ behavior: RM ? "auto" : "smooth" });
 });
+
+// sorpresa: scrivi "vio"
+let typed = "";
+addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea")) return;
+  typed = (typed + e.key.toLowerCase()).slice(-3);
+  if (typed !== "vio") return;
+  allVios().forEach(s => { const prev = s.dataset.expr; face(s, "love"); setTimeout(() => face(s, prev), 2500); });
+  heroLock = Date.now() + 2500; showToast("💜 Vio ti manda un abbraccio con tutti e otto i tentacoli!");
+  const box = document.createElement("div"); box.style.cssText = "position:fixed;left:50%;top:50%;width:0;height:0;z-index:25;pointer-events:none"; document.body.appendChild(box);
+  confetti(box, 60); setTimeout(() => box.remove(), 1700);
+});
+
+/* ================= cielo di stelle collegate ================= */
+(() => {
+  const cv = $("#sky"), ctx = cv.getContext("2d");
+  let W, H, pts = [], mouse = { x: -999, y: -999 };
+  function size() {
+    const dpr = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.round(Math.min(70, W * H / 22000));
+    pts = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .25, vy: (Math.random() - .5) * .25, r: Math.random() * 1.6 + .4 }));
+  }
+  function frame() {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of pts) {
+      if (!RM) { p.x += p.vx; p.y += p.vy; if (p.x < 0 || p.x > W) p.vx *= -1; if (p.y < 0 || p.y > H) p.vy *= -1; }
+      const dm = Math.hypot(p.x - mouse.x, p.y - mouse.y);
+      ctx.fillStyle = dm < 140 ? "rgba(244,114,182,.9)" : "rgba(216,180,254,.6)";
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+    }
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i], b = pts[j], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 120) { ctx.strokeStyle = `rgba(168,85,247,${(1 - d / 120) * .25})`; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    }
+    for (const p of pts) {
+      const d = Math.hypot(p.x - mouse.x, p.y - mouse.y);
+      if (d < 140) { ctx.strokeStyle = `rgba(244,114,182,${(1 - d / 140) * .45})`; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); }
+    }
+    if (!RM) requestAnimationFrame(frame);
+  }
+  addEventListener("resize", size); addEventListener("pointermove", e => { mouse.x = e.clientX; mouse.y = e.clientY; }, { passive: true });
+  size(); frame();
+})();
 </script>
 </body>
 </html>
