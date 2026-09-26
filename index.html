@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyDevAgent · il tuo team di agenti AI, sul tuo PC</title>
+<meta name="description" content="MyDevAgent: assistente di programmazione local-first con 35 agenti specializzati. Gira offline sul tuo PC con Ollama.">
+<meta name="theme-color" content="#0a0612">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 8' shape-rendering='crispEdges'%3E%3Crect x='4' width='6' height='1' fill='%23581c87'/%3E%3Crect x='2' y='1' width='10' height='6' fill='%23a855f7'/%3E%3Crect x='4' y='3' width='2' height='2' fill='%231a0b2e'/%3E%3Crect x='8' y='3' width='2' height='2' fill='%231a0b2e'/%3E%3Crect x='1' y='7' width='12' height='1' fill='%23581c87'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07040d;
+    --bg2: #0f0a1a;
+    --card: rgba(24, 14, 40, .65);
+    --line: rgba(168, 85, 247, .22);
+    --purple: #a855f7;
+    --purple-d: #7e22ce;
+    --purple-dd: #581c87;
+    --lilac: #d8b4fe;
+    --pink: #f472b6;
+    --text: #ede9f6;
+    --muted: #a39cb5;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, system-ui, sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 20px; }
+
+  /* sfondo: griglia + bagliori che si muovono */
+  .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .bg::before {
+    content: ""; position: absolute; inset: 0;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 56px 56px; opacity: .25;
+    mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 70%);
+  }
+  .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .45; animation: float 18s ease-in-out infinite; }
+  .b1 { width: 520px; height: 520px; background: var(--purple-d); top: -160px; left: -120px; }
+  .b2 { width: 420px; height: 420px; background: #c026d3; top: 30%; right: -160px; animation-delay: -6s; opacity: .3; }
+  .b3 { width: 380px; height: 380px; background: var(--purple-dd); bottom: -140px; left: 30%; animation-delay: -12s; }
+  @keyframes float { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(60px,40px) scale(1.1); } 66% { transform: translate(-40px,70px) scale(.95); } }
+
+  /* barra in alto */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(14px); background: rgba(7,4,13,.6);
+    border-bottom: 1px solid transparent; transition: border-color .3s;
+  }
+  nav.scrolled { border-color: var(--line); }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; }
+  .logo svg { width: 34px; }
+  .logo span b { color: var(--purple); }
+  nav ul { display: flex; gap: 28px; list-style: none; font-size: 15px; color: var(--muted); }
+  nav ul a:hover { color: var(--text); }
+  .gh { border: 1px solid var(--line); padding: 7px 14px; border-radius: 999px; font-size: 14px; transition: .25s; }
+  .gh:hover { border-color: var(--purple); box-shadow: 0 0 20px rgba(168,85,247,.35); }
+
+  /* hero */
+  .hero { padding: 90px 0 70px; text-align: center; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--lilac);
+    border: 1px solid var(--line); background: rgba(168,85,247,.08); padding: 6px 14px; border-radius: 999px;
+  }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 10px #4ade80; animation: pulse 2s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .vio-hero { display: block; width: 190px; margin: 34px auto 10px; filter: drop-shadow(0 0 40px rgba(168,85,247,.55)); animation: bob 3.2s ease-in-out infinite; cursor: pointer; }
+  @keyframes bob { 50% { transform: translateY(-12px); } }
+  .bubble {
+    display: inline-block; font-size: 14px; padding: 8px 14px; border-radius: 12px; margin-bottom: 24px;
+    background: rgba(168,85,247,.14); border: 1px solid var(--line); color: var(--lilac); min-height: 40px;
+  }
+  h1 { font-size: clamp(40px, 7vw, 78px); line-height: 1.05; letter-spacing: -.04em; font-weight: 800; }
+  .grad {
+    background: linear-gradient(100deg, #f5d0fe, var(--purple) 40%, var(--pink) 70%, var(--purple));
+    background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shine 6s linear infinite;
+  }
+  @keyframes shine { to { background-position: 200% center; } }
+  .lead { max-width: 680px; margin: 22px auto 0; font-size: clamp(16px, 2.2vw, 19px); color: var(--muted); }
+
+  /* bottoni di download */
+  .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 900px; margin: 44px auto 0; }
+  .dl {
+    position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+    padding: 20px 22px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card);
+    transition: transform .25s, box-shadow .25s, border-color .25s; overflow: hidden;
+  }
+  .dl .ic { font-size: 22px; margin-bottom: 6px; }
+  .dl strong { font-size: 18px; }
+  .dl small { color: var(--muted); font-size: 13px; }
+  .dl::after {
+    content: ""; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.12) 50%, transparent 70%);
+    transform: translateX(-100%); transition: transform .7s;
+  }
+  .dl:hover::after { transform: translateX(100%); }
+  .dl:hover { transform: translateY(-4px); border-color: var(--purple); box-shadow: 0 18px 50px -12px rgba(168,85,247,.55); }
+  .dl.main { background: linear-gradient(135deg, var(--purple-d), var(--purple)); border-color: transparent; box-shadow: 0 10px 40px -10px rgba(168,85,247,.7); }
+  .dl.main small { color: #f3e8ff; }
+  .dl.soon { cursor: not-allowed; opacity: .75; }
+  .dl.soon:hover { transform: none; box-shadow: none; border-color: var(--line); }
+  .tag {
+    position: absolute; top: 14px; right: 14px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px; background: rgba(244,114,182,.15); color: var(--pink); border: 1px solid rgba(244,114,182,.35);
+  }
+  .note { margin-top: 16px; font-size: 13px; color: var(--muted); }
+
+  /* terminale finto */
+  .term {
+    max-width: 820px; margin: 70px auto 0; text-align: left; border-radius: var(--radius); overflow: hidden;
+    border: 1px solid var(--line); background: #0b0712; box-shadow: 0 30px 80px -20px rgba(126,34,206,.5);
+  }
+  .term-top { display: flex; gap: 7px; padding: 12px 14px; background: #120b1e; border-bottom: 1px solid var(--line); }
+  .term-top i { width: 11px; height: 11px; border-radius: 50%; background: #3b2a55; }
+  .term-top i:first-child { background: #f43f5e; } .term-top i:nth-child(2) { background: #facc15; } .term-top i:nth-child(3) { background: #4ade80; }
+  .term pre { padding: 20px 22px; font-size: 14px; min-height: 260px; white-space: pre-wrap; color: #d4d0dc; }
+  .term .p { color: var(--purple); } .term .d { color: #7b7390; } .term .ok { color: #4ade80; } .term .c { color: #67e8f9; } .term .v { color: var(--lilac); font-weight: 600; }
+  .caret { display: inline-block; width: 8px; height: 16px; background: var(--purple); vertical-align: -3px; animation: pulse 1s steps(1) infinite; }
+
+  /* sezioni */
+  section { padding: 100px 0; }
+  .kicker { color: var(--purple); font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+  h2 { font-size: clamp(30px, 4.5vw, 48px); letter-spacing: -.03em; line-height: 1.1; margin: 10px 0 14px; }
+  .sub { color: var(--muted); max-width: 620px; }
+  .center { text-align: center; } .center .sub { margin: 0 auto; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 50px; }
+  .stat { text-align: center; padding: 26px 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
+  .stat b { display: block; font-size: 44px; font-weight: 800; letter-spacing: -.03em; color: var(--lilac); }
+  .stat span { color: var(--muted); font-size: 14px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 50px; }
+  .card {
+    position: relative; padding: 26px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line);
+    transition: transform .3s, border-color .3s;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: 0; transition: opacity .3s;
+    background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 50%), rgba(168,85,247,.18), transparent 60%);
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(168,85,247,.5); }
+  .card:hover::before { opacity: 1; }
+  .card .ic {
+    width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; margin-bottom: 16px;
+    background: linear-gradient(135deg, rgba(168,85,247,.3), rgba(88,28,135,.3)); border: 1px solid var(--line);
+  }
+  .card h3 { font-size: 18px; margin-bottom: 6px; }
+  .card p { color: var(--muted); font-size: 15px; }
+
+  /* modalità */
+  .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 44px; }
+  .mode { padding: 22px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
+  .mode .mono { color: var(--purple); font-weight: 600; }
+  .mode .bar { height: 5px; border-radius: 5px; background: #221638; margin: 12px 0; overflow: hidden; }
+  .mode .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--purple-d), var(--pink)); transition: width 1.4s cubic-bezier(.2,.8,.2,1); }
+  .mode.in .bar i { width: var(--w); }
+  .mode p { color: var(--muted); font-size: 14px; }
+
+  /* screenshot */
+  .shots { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; margin-top: 50px; align-items: start; }
+  .shot { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: #0b0712; box-shadow: 0 20px 60px -20px rgba(126,34,206,.5); }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot figcaption { padding: 12px 16px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+  .shots .col { display: grid; gap: 20px; }
+
+  /* studio */
+  .studio { display: grid; grid-template-columns: 1fr 1.2fr; gap: 50px; align-items: center; }
+  .studio ul { list-style: none; margin: 22px 0 28px; display: grid; gap: 10px; }
+  .studio li { display: flex; gap: 10px; color: var(--muted); }
+  .studio li::before { content: "✦"; color: var(--purple); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 12px; font-weight: 600;
+    background: linear-gradient(135deg, var(--purple-d), var(--purple)); box-shadow: 0 10px 30px -10px rgba(168,85,247,.8); transition: transform .2s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn.ghost { background: transparent; border: 1px solid var(--line); box-shadow: none; }
+
+  /* installazione */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; counter-reset: s; }
+  .step { padding: 26px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); }
+  .step::before {
+    counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--purple); font-weight: 800; margin-bottom: 14px; box-shadow: 0 0 20px rgba(168,85,247,.6);
+  }
+  .step h3 { font-size: 17px; margin-bottom: 8px; }
+  .step p { color: var(--muted); font-size: 14px; }
+  code { font-family: "JetBrains Mono", monospace; font-size: 13px; background: #1a1029; border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; color: var(--lilac); }
+
+  /* MyCode */
+  .mycode {
+    position: relative; overflow: hidden; text-align: center; padding: 60px 30px; border-radius: 26px;
+    border: 1px solid var(--line); background: radial-gradient(ellipse at top, rgba(168,85,247,.25), transparent 60%), var(--bg2);
+  }
+  .mycode .progress { max-width: 420px; margin: 28px auto 0; height: 8px; border-radius: 8px; background: #221638; overflow: hidden; }
+  .mycode .progress i { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, var(--purple), var(--pink), var(--purple)); background-size: 200%; animation: load 2.5s ease-in-out infinite; }
+  @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+
+  footer { border-top: 1px solid var(--line); padding: 40px 0; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+
+  /* comparsa allo scroll */
+  .reveal { opacity: 0; transform: translateY(30px); transition: opacity .8s ease, transform .8s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 120px); z-index: 20; transition: transform .4s cubic-bezier(.2,.9,.3,1.3);
+    background: #1a1029; border: 1px solid var(--purple); padding: 12px 18px; border-radius: 12px; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.5);
+  }
+  .toast { opacity: 0; }
+  .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+  @media (max-width: 900px) {
+    nav ul { display: none; }
+    .downloads, .grid, .steps { grid-template-columns: 1fr; }
+    .modes, .stats { grid-template-columns: repeat(2, 1fr); }
+    .shots, .studio { grid-template-columns: 1fr; }
+    section { padding: 70px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .reveal { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<nav id="nav">
+  <div class="wrap">
+    <a href="#" class="logo"><svg class="vio" data-eyes="open" data-mouth="smile"></svg><span>My<b>Dev</b>Agent</span></a>
+    <ul>
+      <li><a href="#funzioni">Funzioni</a></li>
+      <li><a href="#studio">Studio</a></li>
+      <li><a href="#installa">Installa</a></li>
+      <li><a href="#mycode">MyCode</a></li>
+    </ul>
+    <a class="gh" href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent" target="_blank" rel="noopener">★ GitHub</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="pill reveal"><i></i> Gratis · open source · funziona offline</span>
+    <svg class="vio vio-hero" id="vioHero" data-eyes="open" data-mouth="smile" aria-label="Vio, il polpetto viola di MyDevAgent"></svg>
+    <div><span class="bubble" id="bubble">Ciao! Sono Vio 👋</span></div>
+    <h1 class="reveal">Un team di <span class="grad">35 agenti AI</span><br>sul tuo PC.</h1>
+    <p class="lead reveal">MyDevAgent legge il tuo progetto, scrive il codice, lancia i test e si corregge da solo. Tutto in locale con Ollama: i tuoi file non lasciano mai il computer.</p>
+
+    <div class="downloads reveal">
+      <a class="dl main" href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent/archive/refs/heads/claude/gracious-mayer-mt8l9b.zip">
+        <span class="ic">📦</span><strong>Scarica MyDevAgent</strong><small>Cartella .zip · Windows, Linux, macOS</small>
+      </a>
+      <a class="dl" href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent/releases/latest/download/MyDevAgent-Studio-Setup.exe">
+        <span class="ic">🖥️</span><strong>Scarica Studio</strong><small>Setup .exe · l'editor con Vio · Windows</small>
+      </a>
+      <a class="dl soon" href="#mycode" id="mycodeBtn" aria-disabled="true">
+        <span class="tag">Presto</span>
+        <span class="ic">🧠</span><strong>MyCode</strong><small>Il nostro modello AI · in addestramento</small>
+      </a>
+    </div>
+    <p class="note">Serve <a href="https://ollama.com" target="_blank" rel="noopener" style="color:var(--lilac)">Ollama</a> e Python 3.10+. Lo Studio li installa da solo.</p>
+
+    <div class="term reveal">
+      <div class="term-top"><i></i><i></i><i></i></div>
+      <pre class="mono" id="term"></pre>
+    </div>
+  </div>
+</header>
+
+<section id="funzioni">
+  <div class="wrap">
+    <div class="center reveal">
+      <p class="kicker">Funzioni</p>
+      <h2>Tutto quello che fa un assistente di coding.<br><span class="grad">Ma a casa tua.</span></h2>
+      <p class="sub">Le idee migliori di Claude Code, Cursor e Aider, in un solo programma gratuito che gira anche senza internet.</p>
+    </div>
+
+    <div class="stats">
+      <div class="stat reveal"><b data-count="35">0</b><span>agenti specializzati</span></div>
+      <div class="stat reveal"><b data-count="4">0</b><span>modalità di lavoro</span></div>
+      <div class="stat reveal"><b data-count="100" data-suffix="%">0</b><span>locale e privato</span></div>
+      <div class="stat reveal"><b data-count="0" data-prefix="€ ">0</b><span>per sempre</span></div>
+    </div>
+
+    <div class="grid">
+      <div class="card reveal"><div class="ic">✍️</div><h3>Lavora sui tuoi file</h3><p>Legge, modifica e ti mostra i diff prima di salvare. Sbagliato? <code>/undo</code> e si torna indietro.</p></div>
+      <div class="card reveal"><div class="ic">🧪</div><h3>Test veri</h3><p>Lancia i test del progetto, legge gli errori e corregge finché non passano.</p></div>
+      <div class="card reveal"><div class="ic">🌐</div><h3>Ricerca web</h3><p>Quando sei online cerca documentazione aggiornata. Offline funziona lo stesso.</p></div>
+      <div class="card reveal"><div class="ic">🧩</div><h3>Plugin, skill e MCP</h3><p>Compatibile con i plugin, le skill, gli hook e i server MCP di Claude Code.</p></div>
+      <div class="card reveal"><div class="ic">👀</div><h3>Anteprima dei siti</h3><p>Apre la pagina su localhost, la guarda con un modello vision e legge gli errori della console.</p></div>
+      <div class="card reveal"><div class="ic">🎮</div><h3>Multigiocatore</h3><p>Con <code>/multi</code> i tuoi amici seguono la sessione dal browser e scrivono all'agente.</p></div>
+      <div class="card reveal"><div class="ic">🎓</div><h3>Modalità impara</h3><p><code>/impara</code> ti spiega cosa fa e ti lascia scrivere un pezzo di codice da solo.</p></div>
+      <div class="card reveal"><div class="ic">🚀</div><h3>Progetti pronti</h3><p><code>/new</code> crea un sito, un gioco Pygame, un bot Discord o un'API FastAPI in un attimo.</p></div>
+      <div class="card reveal"><div class="ic">📊</div><h3>Statistiche</h3><p><code>/stats</code> mostra richieste, token, righe cambiate e i tuoi giorni di fila.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="modi">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker">Il team</p>
+      <h2>Scegli quanti agenti mettere al lavoro.</h2>
+      <p class="sub">Un router tiene veloci le richieste semplici e chiama il team completo solo quando serve davvero.</p>
+    </div>
+    <div class="modes">
+      <div class="mode reveal" style="--w:15%"><span class="mono">/fast</span><div class="bar"><i></i></div><p>Un solo specialista. Risposte in pochi secondi.</p></div>
+      <div class="mode reveal" style="--w:40%"><span class="mono">/balanced</span><div class="bar"><i></i></div><p>Architetto, agente, test e review sul diff reale.</p></div>
+      <div class="mode reveal" style="--w:65%"><span class="mono">/deep</span><div class="bar"><i></i></div><p>In più sicurezza, performance e casi limite.</p></div>
+      <div class="mode reveal" style="--w:100%"><span class="mono">/ultra-deep</span><div class="bar"><i></i></div><p>Tutti i 35 agenti, 25 revisioni in parallelo.</p></div>
+    </div>
+
+    <div class="shots">
+      <figure class="shot reveal"><img src="img/terminale.png" alt="MyDevAgent nel terminale con Vio sopra la barra di input"><figcaption>Il terminale di MyDevAgent, con Vio che ti tiene compagnia.</figcaption></figure>
+      <figure class="shot reveal"><img src="img/agenti.png" alt="La lista dei sotto-agenti di MyDevAgent"><figcaption>Sotto-agenti con contesto separato.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="studio">
+  <div class="wrap studio">
+    <div class="reveal">
+      <p class="kicker">MyDevAgent Studio</p>
+      <h2>Il tuo editor, <span class="grad">con Vio dentro.</span></h2>
+      <p class="sub">Un editor completo basato su VSCodium, già pronto con MyDevAgent. Un solo setup installa tutto.</p>
+      <ul>
+        <li>Installa da solo Python, Ollama e MyDevAgent</li>
+        <li>Chat con Vio nella barra laterale</li>
+        <li>Modifiche nel codice con <code>Ctrl+I</code></li>
+        <li>Tema nero e viola, statistiche integrate</li>
+      </ul>
+      <a class="btn" href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent/releases/latest/download/MyDevAgent-Studio-Setup.exe">⬇ Scarica il setup per Windows</a>
+    </div>
+    <figure class="shot reveal"><img src="img/studio.png" alt="MyDevAgent Studio con la chat di Vio e una modifica con Ctrl+I"><figcaption>Studio: chat, statistiche e modifica con Ctrl+I.</figcaption></figure>
+  </div>
+</section>
+
+<section id="installa">
+  <div class="wrap">
+    <div class="center reveal">
+      <p class="kicker">Installazione</p>
+      <h2>Pronto in tre passi.</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><h3>Installa Ollama</h3><p>Scaricalo da <a href="https://ollama.com" target="_blank" rel="noopener" style="color:var(--lilac)">ollama.com</a>. È il motore che fa girare i modelli sul tuo PC.</p></div>
+      <div class="step reveal"><h3>Scarica ed estrai lo zip</h3><p>Premi <b>Scarica MyDevAgent</b> qui sopra ed estrai la cartella dove vuoi.</p></div>
+      <div class="step reveal"><h3>Avvia</h3><p>Su Windows apri <code>run.bat</code>, su Linux e macOS <code>./run.sh</code>. Al primo avvio controlla tutto da solo.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="mycode">
+  <div class="wrap">
+    <div class="mycode reveal">
+      <p class="kicker">In arrivo</p>
+      <h2>MyCode, <span class="grad">il nostro modello AI.</span></h2>
+      <p class="sub" style="margin:0 auto">Un modello per il codice addestrato apposta per MyDevAgent, che gira su una GPU da 8 GB. Lo potrai usare da solo in Ollama o come cervello di MyDevAgent.</p>
+      <div class="progress"><i></i></div>
+      <p class="note">In addestramento… torna presto per scaricarlo.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span class="logo"><svg class="vio" data-eyes="happy" data-mouth="smile"></svg><span>My<b>Dev</b>Agent</span></span>
+    <span>Fatto con 💜 e otto tentacoli · <a href="https://github.com/giovannisantorofrancesco2011-arch/MyDevAgent" target="_blank" rel="noopener" style="color:var(--lilac)">codice su GitHub</a></span>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Vio: la stessa pixel art 14×8 del terminale (mydevagent/tui/mascot.py)
+const COLORS = { P: "#a855f7", D: "#581c87", L: "#d8b4fe", K: "#1a0b2e", W: "#ffffff", C: "#f472b6", Y: "#facc15", B: "#67e8f9" };
+const HEAD = [".....DDDD.....", "...DDPPPPDD...", "..DPLPPPPPPD.."];
+const EYES = {
+  open: [".DPPWKPPWKPPD.", ".DPPKKPPKKPPD."],
+  happy: [".DPPKPPPPKPPD.", ".DPKPKPPKPKPD."],
+  closed: [".DPPPPPPPPPPD.", ".DPKKKPPKKKPD."],
+  stars: [".DPPYWPPYWPPD.", ".DPPYYPPYYPPD."],
+  hearts: [".DPCPCPPCPCPD.", ".DPPCPPPPCPPD."],
+  glasses: [".DPBBBPPBBBPD.", ".DPBWKBBWKBPD."],
+};
+const MOUTHS = { smile: ".DPCPPKKPPCPD.", open: ".DPCPKKKKPCPD." };
+const TENTACLES = [["DPDPDPPPPDPDPD", "D.P.P.DD.P.P.D"], ["DPDPDPPPPDPDPD", ".D.P.PDDP.P.D."]];
+let pose = 0;
+
+function drawVio(svg) {
+  const rows = [...HEAD, ...EYES[svg.dataset.eyes], MOUTHS[svg.dataset.mouth], ...TENTACLES[pose]];
+  let out = "";
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch !== ".") out += `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${COLORS[ch]}"/>`;
+  }));
+  svg.setAttribute("viewBox", "0 0 14 8");
+  svg.setAttribute("shape-rendering", "crispEdges");
+  svg.innerHTML = out;
+}
+const vios = [...document.querySelectorAll("svg.vio")];
+const drawAll = () => vios.forEach(drawVio);
+drawAll();
+setInterval(() => { pose ^= 1; drawAll(); }, 600); // tentacoli che ondeggiano
+
+const hero = document.getElementById("vioHero");
+const bubble = document.getElementById("bubble");
+function setFace(eyes, mouth) { hero.dataset.eyes = eyes; hero.dataset.mouth = mouth; drawVio(hero); }
+setInterval(() => { // sbatte le palpebre
+  if (hero.dataset.eyes !== "open") return;
+  setFace("closed", hero.dataset.mouth); setTimeout(() => setFace("open", "smile"), 160);
+}, 3400);
+
+const SAYS = [
+  ["Ciao! Sono Vio 👋", "open", "smile"],
+  ["Otto tentacoli pronti a programmare!", "stars", "open"],
+  ["Leggo il tuo codice e ti propongo un piano.", "glasses", "smile"],
+  ["Gira tutto sul tuo PC, anche offline.", "happy", "smile"],
+];
+let say = 0;
+function typeBubble(text) {
+  let i = 0; bubble.textContent = "";
+  const t = setInterval(() => { bubble.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(t); }, 28);
+}
+setInterval(() => {
+  say = (say + 1) % SAYS.length;
+  const [text, eyes, mouth] = SAYS[say];
+  setFace(eyes, mouth); typeBubble(text);
+  if (eyes !== "open") setTimeout(() => setFace("open", "smile"), 2200);
+}, 4200);
+const PATS = ["Grazie! 💜", "Fusa da polpo in corso… 💜", "Ancora, ancora! 💜"];
+hero.addEventListener("click", () => { setFace("hearts", "smile"); typeBubble(PATS[Math.floor(Math.random() * PATS.length)]); setTimeout(() => setFace("open", "smile"), 1600); });
+
+// terminale che si scrive da solo
+const SCRIPT = [
+  ['<span class="p">›</span> ', 0], ["aggiungi il login al mio sito e scrivi i test", 32], ["\n", 300],
+  ['<span class="d">● balanced · Architetto ▶ agente ▶ test ▶ review</span>\n', 500],
+  ['<span class="c">  ✎ modifica</span> app/auth.py <span class="ok">+48</span>\n', 600],
+  ['<span class="c">  ✎ modifica</span> templates/login.html <span class="ok">+31</span>\n', 500],
+  ['<span class="c">  ✎ nuovo</span> tests/test_auth.py <span class="ok">+62</span>\n', 500],
+  ['<span class="c">  ▶ esegue</span> pytest -q\n', 700],
+  ['<span class="ok">  ✓ 12 test passati</span>\n', 900],
+  ['<span class="c">  ◆ review</span> nessun problema trovato\n\n', 600],
+  ['<span class="v">Vio</span> <span class="d">·</span> Fatto in 41s! Vuoi vedere il diff?\n', 500],
+];
+const term = document.getElementById("term");
+async function runTerm() {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  while (true) {
+    let html = "";
+    for (const [chunk, speed] of SCRIPT) {
+      if (speed > 0 && speed < 100 && !chunk.includes("<")) {
+        for (const ch of chunk) { html += ch; term.innerHTML = html + '<span class="caret"></span>'; await sleep(speed); }
+      } else { await sleep(speed); html += chunk; term.innerHTML = html + '<span class="caret"></span>'; }
+    }
+    await sleep(5000);
+  }
+}
+runTerm();
+
+// comparsa allo scroll + barre + contatori
+const io = new IntersectionObserver(entries => entries.forEach(e => {
+  if (!e.isIntersecting) return;
+  e.target.classList.add("in");
+  const n = e.target.querySelector("[data-count]");
+  if (n) countUp(n);
+  io.unobserve(e.target);
+}), { threshold: .15 });
+document.querySelectorAll(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 3) * 90 + "ms"; io.observe(el); });
+function countUp(el) {
+  const end = +el.dataset.count, pre = el.dataset.prefix || "", suf = el.dataset.suffix || "", t0 = performance.now();
+  const tick = now => {
+    const p = Math.min((now - t0) / 1400, 1);
+    el.textContent = pre + Math.round(end * (1 - Math.pow(1 - p, 3))) + suf;
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// luce che segue il mouse sulle card
+document.querySelectorAll(".card").forEach(c => c.addEventListener("pointermove", e => {
+  const r = c.getBoundingClientRect();
+  c.style.setProperty("--mx", e.clientX - r.left + "px"); c.style.setProperty("--my", e.clientY - r.top + "px");
+}));
+
+// barra in alto
+const nav = document.getElementById("nav");
+addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 10), { passive: true });
+
+// MyCode non è ancora pronto
+const toast = document.getElementById("toast");
+document.getElementById("mycodeBtn").addEventListener("click", e => {
+  e.preventDefault();
+  toast.textContent = "🧠 MyCode è ancora in addestramento: arriva presto!";
+  toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 2600);
+  document.getElementById("mycode").scrollIntoView({ behavior: "smooth" });
+});
+</script>
+</body>
+</html>
