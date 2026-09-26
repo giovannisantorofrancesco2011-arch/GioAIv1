@@ -35,6 +35,8 @@ function onPath(name: string): string | undefined {
   return undefined;
 }
 
+const BOOT = "import sys; sys.path.insert(0, sys.argv.pop(1)); from mydevagent.cli import app; app()";
+
 /** Dove è installato MyDevAgent: l'impostazione, le cartelle abituali, un livello sotto Desktop e Documenti, il PATH. */
 export function locate(setting: string): Install | undefined {
   const home = os.homedir();
@@ -50,7 +52,9 @@ export function locate(setting: string): Install | undefined {
   for (const dir of candidates.filter(Boolean)) {
     const python = venvPython(dir);
     if (python && fs.existsSync(path.join(dir, "mydevagent", "__init__.py"))) {
-      return { home: dir, command: python, args: ["-m", "mydevagent.cli", "bridge"] };
+      // non `-m mydevagent.cli`: se l'installazione `pip install -e` è rotta (cartella spostata, scaricata come zip…)
+      // Python trova MyDevAgent solo quando parte dalla sua cartella, e Vio lavora nella cartella del progetto
+      return { home: dir, command: python, args: ["-c", BOOT, dir, "bridge"] };
     }
   }
   const exe = onPath(WIN ? "mydevagent.exe" : "mydevagent");
