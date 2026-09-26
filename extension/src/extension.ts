@@ -58,6 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => void chat.connect()),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => void chat.connect()),
     vscode.window.onDidChangeActiveTextEditor(contextChanged),
     vscode.window.onDidChangeTextEditorSelection(contextChanged),
     watcher.onDidCreate(filesChanged),

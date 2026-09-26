@@ -2,7 +2,7 @@
   "name": "mydevagent",
   "displayName": "MyDevAgent",
   "description": "Vio, il tuo agente di programmazione locale: chat, modifiche con conferma, Ctrl+I e Tab. Funziona con Ollama, senza cloud.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "mydevagent",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -26,6 +26,12 @@
     "italiano"
   ],
   "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Nelle cartelle non fidate Vio non legge, non modifica e non lancia niente: te lo dice e ti fa scegliere."
+    }
+  },
   "activationEvents": [
     "onStartupFinished"
   ],

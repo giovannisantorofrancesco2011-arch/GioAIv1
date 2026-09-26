@@ -15,7 +15,9 @@ computer con Ollama, niente cloud e niente abbonamenti.
    **Ulteriori informazioni** e poi **Esegui comunque**.
 3. Lascia la spunta su «Installa anche Python, Ollama e MyDevAgent se mancano». Si apre una finestra che scarica
    quello che serve; la prima volta i modelli pesano qualche GB.
-4. Apri MyDevAgent Studio, apri la cartella del tuo progetto e parla con Vio nella barra a sinistra.
+4. Apri MyDevAgent Studio, apri la cartella del tuo progetto e parla con Vio nella barra a sinistra. Quando Studio
+   chiede se ti fidi della cartella, rispondi sì: nelle cartelle non fidate Vio non lavora (te lo ricorda nella chat,
+   con il pulsante per fidarti).
 
 Se qualcosa manca (Ollama spento, un modello non scaricato, MyDevAgent non trovato) Vio lo dice nella chat e ti dà il
 pulsante per sistemarlo.

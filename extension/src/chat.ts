@@ -174,6 +174,11 @@ ${script("chat.js")}
       return this.setup("info", "Apri una cartella", "Lavoro dentro la cartella del tuo progetto: aprine una e cominciamo.",
         [{ id: "open-folder", label: "Apri una cartella", primary: true }], "Apri una cartella e cominciamo!");
     }
+    if (!vscode.workspace.isTrusted) { // modalità protetta: si ricollega da sola quando ti fidi (extension.ts)
+      return this.setup("info", "Questa cartella non è ancora fidata",
+        "Studio l'ha aperta in modalità protetta: finché non ti fidi, io non leggo, non modifico e non lancio niente qui dentro.",
+        [{ id: "trust-folder", label: "Mi fido di questa cartella", primary: true }], "Posso lavorare qui? Dimmi che ti fidi.");
+    }
     this.root = folder.uri.fsPath;
     this.install = locate(config().get("percorso", ""));
     if (!this.install) {
@@ -379,6 +384,7 @@ ${script("chat.js")}
         return; // onConfig si ricollega
       }
       case "retry": return this.connect();
+      case "trust-folder": return void vscode.commands.executeCommand("workbench.trust.manage");
       case "log": return this.log.show();
       case "pull": return this.pullMissing();
       case "start-ollama": return this.startOllama();

@@ -2,7 +2,7 @@
   "name": "mydevagent-studio-defaults",
   "displayName": "MyDevAgent Studio",
   "description": "Le impostazioni di partenza di MyDevAgent Studio: tema viola e niente aggiornamenti di VSCodium.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "mydevagent",
   "license": "MIT",
   "engines": {
@@ -19,5 +19,11 @@
       "editor.cursorBlinking": "smooth",
       "editor.smoothScrolling": true
     }
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
   }
 }
